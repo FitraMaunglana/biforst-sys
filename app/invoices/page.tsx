@@ -5,7 +5,7 @@ import { supabase } from '../../src/lib/supabaseClient';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import {
-    FileText, Download, Plus, ArrowLeft, Building2, Clock
+    FileText, Download, Plus, ArrowLeft, Building2, Clock, CheckCircle2, X, Eye
 } from 'lucide-react';
 
 const terbilang = (angka: number): string => {
@@ -18,7 +18,7 @@ const terbilang = (angka: number): string => {
     if (angka < 2000) return 'seribu ' + (angka - 1000 !== 0 ? terbilang(angka - 1000) : '');
     if (angka < 1000000) return terbilang(Math.floor(angka / 1000)) + ' ribu ' + (angka % 1000 !== 0 ? terbilang(angka % 1000) : '');
     if (angka < 1000000000) return terbilang(Math.floor(angka / 1000000)) + ' juta ' + (angka % 1000000 !== 0 ? terbilang(angka % 1000000) : '');
-    if (angka < 1000000000000) return terbilang(Math.floor(angka / 1000000000)) + ' militar ' + (angka % 1000000000 !== 0 ? terbilang(angka % 1000000000) : '');
+    if (angka < 1000000000000) return terbilang(Math.floor(angka / 1000000000)) + ' miliar ' + (angka % 1000000000 !== 0 ? terbilang(angka % 1000000000) : '');
     return '';
 };
 
@@ -32,6 +32,21 @@ export default function InvoicePage() {
     const [billingType, setBillingType] = useState('Gabungan (CST + MRC)');
     const [dueDate, setDueDate] = useState('');
     const [isGenerating, setIsGenerating] = useState(false);
+
+    // State untuk Modal Pratinjau PDF
+    const [previewPdf, setPreviewPdf] = useState<{ url: string; doc: any; fileName: string } | null>(null);
+
+    // State untuk Modal Pembayaran
+    const [showPaymentModal, setShowPaymentModal] = useState(false);
+    const [isProcessingPayment, setIsProcessingPayment] = useState(false);
+    const [paymentData, setPaymentData] = useState({
+        invoice_id: '',
+        invoice_number: '',
+        total_amount: 0,
+        payment_date: new Date().toISOString().split('T')[0],
+        amount: 0,
+        payment_method: 'Transfer BCA'
+    });
 
     useEffect(() => {
         fetchData();
@@ -102,11 +117,9 @@ export default function InvoicePage() {
             let subtotalMRC = 0;
             const tableRows: any[] = [];
 
-            // Membypass strict-type TypeScript dengan as any[]
             const rawTitikData = titikData as any[];
 
             rawTitikData.forEach((titik, idx) => {
-                // Antisipasi jika Supabase mengembalikan relasi 1-to-1 sebagai Array
                 const harga = Array.isArray(titik.titik_harga) ? titik.titik_harga[0] : titik.titik_harga;
 
                 const cst = Number(harga?.harga_jual_cst) || 0;
@@ -158,8 +171,15 @@ export default function InvoicePage() {
 
             if (invErr) throw invErr;
 
-            await generatePDF(invNumber, issueDate, dueDate, selectedKabData, tableRows, subtotalDPP, ppn11, grandTotal, rawTitikData.length);
+            // Jangan langsung download, ambil objek dokumen PDF-nya
+            const doc = await generatePDF(invNumber, issueDate, dueDate, selectedKabData, tableRows, subtotalDPP, ppn11, grandTotal, rawTitikData.length);
 
+            // Buat pratinjau Blob URL
+            const pdfBlob = doc.output('blob');
+            const pdfUrl = URL.createObjectURL(pdfBlob);
+            const fileName = `${invNumber.replace(/\//g, '_')}.pdf`;
+
+            setPreviewPdf({ url: pdfUrl, doc: doc, fileName });
             fetchData();
 
         } catch (error: any) {
@@ -244,7 +264,6 @@ export default function InvoicePage() {
         doc.setFontSize(10);
         doc.setFont("helvetica", "bold");
         doc.setTextColor(...primaryColor);
-        // Informasi PIC telah dihapus dari baris judul tabel rincian
         doc.text(`Rincian Tagihan: ${kabData.name}`, 14, 80);
 
         autoTable(doc, {
@@ -256,7 +275,7 @@ export default function InvoicePage() {
             headStyles: { fillColor: primaryColor, textColor: 255, fontStyle: 'bold' },
             alternateRowStyles: { fillColor: [250, 251, 252] },
             columnStyles: {
-                0: { halign: 'center', cellWidth: 10 },
+                0: { halign: 'center', cellWidth: 15 },
                 3: { halign: 'center' },
                 4: { halign: 'right' },
                 5: { halign: 'right' },
@@ -360,13 +379,60 @@ export default function InvoicePage() {
         const splitNote = doc.splitTextToSize(noteText, 182);
         doc.text(splitNote, 14, 280);
 
-        doc.save(`${invNum.replace(/\//g, '_')}.pdf`);
+        // KEMBALIKAN OBJEK DOC, BUKAN LANGSUNG MENGUNDUHNYA
+        return doc;
     };
 
     const formatIDR = (num: number) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(num);
 
+    const openPaymentModal = (inv: any) => {
+        setPaymentData({
+            invoice_id: inv.id,
+            invoice_number: inv.invoice_number,
+            total_amount: inv.total_amount,
+            payment_date: new Date().toISOString().split('T')[0],
+            amount: inv.total_amount,
+            payment_method: 'Transfer BCA'
+        });
+        setShowPaymentModal(true);
+    };
+
+    const handlePaymentSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setIsProcessingPayment(true);
+        try {
+            const { error: paymentErr } = await supabase
+                .from('invoice_payments')
+                .insert({
+                    invoice_id: paymentData.invoice_id,
+                    payment_date: paymentData.payment_date,
+                    amount: paymentData.amount,
+                    payment_method: paymentData.payment_method
+                });
+
+            if (paymentErr) throw paymentErr;
+
+            const newStatus = paymentData.amount >= paymentData.total_amount ? 'Lunas' : 'Dibayar Sebagian';
+            const { error: invUpdateErr } = await supabase
+                .from('invoices')
+                .update({ status: newStatus })
+                .eq('id', paymentData.invoice_id);
+
+            if (invUpdateErr) throw invUpdateErr;
+
+            alert(`Pembayaran berhasil dicatat! Status diubah menjadi: ${newStatus}`);
+            setShowPaymentModal(false);
+            fetchData();
+
+        } catch (error: any) {
+            alert("Gagal mencatat pembayaran: " + error.message);
+        } finally {
+            setIsProcessingPayment(false);
+        }
+    };
+
     return (
-        <div className="min-h-screen bg-slate-50 text-slate-800 font-sans p-6">
+        <div className="min-h-screen bg-slate-50 text-slate-800 font-sans p-6 relative">
             <div className="max-w-6xl mx-auto space-y-6">
 
                 <div className="flex items-center justify-between bg-slate-900 p-6 rounded-2xl text-white shadow-lg">
@@ -431,8 +497,8 @@ export default function InvoicePage() {
                                     disabled={isGenerating}
                                     className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-400 text-white font-bold rounded-xl text-sm transition flex items-center justify-center gap-2 shadow-md"
                                 >
-                                    {isGenerating ? 'Memproses PDF...' : 'Kalkulasi & Unduh PDF'}
-                                    {!isGenerating && <Download className="w-4 h-4" />}
+                                    {isGenerating ? 'Menyiapkan PDF...' : 'Kalkulasi & Pratinjau PDF'}
+                                    {!isGenerating && <Eye className="w-4 h-4" />}
                                 </button>
                             </div>
                         </form>
@@ -455,28 +521,43 @@ export default function InvoicePage() {
                                     <thead className="text-slate-400 bg-slate-50 font-bold uppercase tracking-wider">
                                         <tr>
                                             <th className="px-4 py-3 rounded-l-lg">Nomor Invoice</th>
-                                            <th className="px-4 py-3">Kabupaten</th>
                                             <th className="px-4 py-3">Jatuh Tempo</th>
                                             <th className="px-4 py-3 text-right">Total Nilai</th>
-                                            <th className="px-4 py-3 text-center rounded-r-lg">Status</th>
+                                            <th className="px-4 py-3 text-center">Status</th>
+                                            <th className="px-4 py-3 text-center rounded-r-lg">Aksi</th>
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-slate-100">
                                         {invoices.map((inv) => (
                                             <tr key={inv.id} className="hover:bg-slate-50 transition">
-                                                <td className="px-4 py-4 font-mono font-bold text-indigo-600">{inv.invoice_number}</td>
-                                                <td className="px-4 py-4 font-semibold text-slate-700">{inv.kabupatens?.name}</td>
-                                                <td className="px-4 py-4 text-slate-500 flex items-center gap-1">
+                                                <td className="px-4 py-4 font-mono font-bold text-indigo-600">
+                                                    {inv.invoice_number}
+                                                    <div className="text-[10px] text-slate-400 font-sans mt-0.5">{inv.kabupatens?.name}</div>
+                                                </td>
+                                                <td className="px-4 py-4 text-slate-500 whitespace-nowrap flex items-center gap-1">
                                                     <Clock className="w-3 h-3" /> {formatDateIndo(inv.due_date)}
                                                 </td>
-                                                <td className="px-4 py-4 font-bold text-right text-slate-900">{formatIDR(inv.total_amount)}</td>
+                                                <td className="px-4 py-4 font-bold text-right text-slate-900 whitespace-nowrap">{formatIDR(inv.total_amount)}</td>
                                                 <td className="px-4 py-4 text-center">
-                                                    <span className={`px-2 py-1 rounded-md text-[10px] font-bold uppercase ${inv.status === 'Terkirim' ? 'bg-blue-50 text-blue-600 border border-blue-200' :
-                                                        inv.status === 'Lunas' ? 'bg-emerald-50 text-emerald-600 border border-emerald-200' :
-                                                            'bg-slate-100 text-slate-600'
+                                                    <span className={`px-2 py-1 rounded-md text-[10px] font-bold uppercase ${inv.status === 'Terkirim' ? 'bg-amber-50 text-amber-600 border border-amber-200' :
+                                                            inv.status === 'Lunas' ? 'bg-emerald-50 text-emerald-600 border border-emerald-200' :
+                                                                inv.status === 'Dibayar Sebagian' ? 'bg-blue-50 text-blue-600 border border-blue-200' :
+                                                                    'bg-slate-100 text-slate-600'
                                                         }`}>
                                                         {inv.status}
                                                     </span>
+                                                </td>
+                                                <td className="px-4 py-4 text-center">
+                                                    {inv.status === 'Terkirim' || inv.status === 'Dibayar Sebagian' ? (
+                                                        <button
+                                                            onClick={() => openPaymentModal(inv)}
+                                                            className="text-[10px] bg-indigo-50 text-indigo-700 font-bold px-2 py-1.5 rounded border border-indigo-200 hover:bg-indigo-600 hover:text-white transition whitespace-nowrap"
+                                                        >
+                                                            Terima Dana
+                                                        </button>
+                                                    ) : (
+                                                        <span className="text-[10px] text-slate-400 italic">Selesai</span>
+                                                    )}
                                                 </td>
                                             </tr>
                                         ))}
@@ -487,6 +568,105 @@ export default function InvoicePage() {
                     </div>
                 </div>
             </div>
+
+            {/* MODAL PRATINJAU PDF (PREVIEW) */}
+            {previewPdf && (
+                <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
+                    <div className="bg-white rounded-2xl shadow-xl w-full max-w-4xl h-[90vh] flex flex-col overflow-hidden">
+                        <div className="bg-slate-900 p-4 flex items-center justify-between text-white shrink-0">
+                            <h3 className="font-bold flex items-center gap-2">
+                                <FileText className="w-5 h-5 text-indigo-400" /> Pratinjau Invoice Resmi
+                            </h3>
+                            <div className="flex items-center gap-4">
+                                <button
+                                    onClick={() => previewPdf.doc.save(previewPdf.fileName)}
+                                    className="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold rounded-lg flex items-center gap-2 transition"
+                                >
+                                    <Download className="w-4 h-4" /> Simpan & Unduh PDF
+                                </button>
+                                <button onClick={() => setPreviewPdf(null)} className="text-slate-400 hover:text-white transition" title="Tutup Preview">
+                                    <X className="w-6 h-6" />
+                                </button>
+                            </div>
+                        </div>
+                        <div className="flex-1 bg-slate-200 relative">
+                            {/* Menampilkan pratinjau PDF murni menggunakan iframe */}
+                            <iframe
+                                src={previewPdf.url}
+                                className="w-full h-full border-none absolute inset-0"
+                                title="Invoice Preview"
+                            />
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* MODAL KONFIRMASI PEMBAYARAN */}
+            {showPaymentModal && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4">
+                    <div className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden">
+                        <div className="bg-slate-900 p-4 flex items-center justify-between text-white">
+                            <h3 className="font-bold flex items-center gap-2">
+                                <CheckCircle2 className="w-5 h-5 text-emerald-400" /> Konfirmasi Pencairan Dana
+                            </h3>
+                            <button onClick={() => setShowPaymentModal(false)} className="text-slate-400 hover:text-white">
+                                <X className="w-5 h-5" />
+                            </button>
+                        </div>
+                        <form onSubmit={handlePaymentSubmit} className="p-6 space-y-4">
+                            <div className="bg-slate-50 p-3 rounded-xl border border-slate-100 text-center mb-2">
+                                <p className="text-[11px] text-slate-500 uppercase tracking-wider font-bold">Tagihan PT Comtelindo</p>
+                                <p className="font-mono font-bold text-indigo-600">{paymentData.invoice_number}</p>
+                                <p className="text-xl font-black text-slate-900 mt-1">{formatIDR(paymentData.total_amount)}</p>
+                            </div>
+
+                            <div>
+                                <label className="block text-xs font-bold text-slate-600 mb-1">Tanggal Transfer Masuk</label>
+                                <input
+                                    type="date"
+                                    value={paymentData.payment_date}
+                                    onChange={(e) => setPaymentData({ ...paymentData, payment_date: e.target.value })}
+                                    className="w-full text-sm px-3 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none"
+                                    required
+                                />
+                            </div>
+
+                            <div>
+                                <label className="block text-xs font-bold text-slate-600 mb-1">Nominal Diterima (Rp)</label>
+                                <input
+                                    type="number"
+                                    value={paymentData.amount}
+                                    onChange={(e) => setPaymentData({ ...paymentData, amount: Number(e.target.value) })}
+                                    className="w-full font-mono text-sm px-3 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none"
+                                    required
+                                />
+                            </div>
+
+                            <div>
+                                <label className="block text-xs font-bold text-slate-600 mb-1">Metode Pembayaran</label>
+                                <select
+                                    value={paymentData.payment_method}
+                                    onChange={(e) => setPaymentData({ ...paymentData, payment_method: e.target.value })}
+                                    className="w-full text-sm px-3 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none"
+                                >
+                                    <option value="Transfer BCA">Transfer Bank BCA</option>
+                                    <option value="Transfer Mandiri">Transfer Bank Mandiri</option>
+                                    <option value="Cek Giro">Cek / Giro</option>
+                                    <option value="Tunai">Tunai</option>
+                                </select>
+                            </div>
+
+                            <button
+                                type="submit"
+                                disabled={isProcessingPayment}
+                                className="w-full mt-4 py-3 bg-emerald-500 hover:bg-emerald-600 disabled:bg-slate-400 text-white font-bold rounded-xl text-sm transition shadow-md"
+                            >
+                                {isProcessingPayment ? 'Mencatat Transaksi...' : 'Tandai Sebagai Lunas'}
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }
