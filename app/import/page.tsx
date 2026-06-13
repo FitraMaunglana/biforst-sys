@@ -116,12 +116,15 @@ export default function ImportPage() {
                 proj = newProj;
             }
 
+            // [TAMBAHAN] Validasi keamanan ekstra untuk menjinakkan TypeScript
+            if (!proj) throw new Error("Gagal menginisialisasi proyek utama.");
+
             // 2. Siapkan Entri Kabupaten
             let { data: kab } = await supabase
                 .from('kabupatens')
                 .select('id')
                 .eq('name', activeSheet)
-                .eq('project_id', proj.id)
+                .eq('project_id', proj.id) // TypeScript kini tahu proj pasti tidak null
                 .single();
 
             if (!kab) {
@@ -139,6 +142,9 @@ export default function ImportPage() {
                 kab = newKab;
             }
 
+            // [TAMBAHAN] Validasi keamanan ekstra untuk menjinakkan TypeScript
+            if (!kab) throw new Error("Gagal menginisialisasi tabel kabupaten.");
+
             // 3. Loop Injeksi Titik dan Harga
             let successCount = 0;
             addLog(`Mempersiapkan injeksi ${parsedData.length} titik koordinat...`);
@@ -148,7 +154,7 @@ export default function ImportPage() {
                 const { data: existingTitik } = await supabase
                     .from('titik_lokasi')
                     .select('id')
-                    .eq('kabupaten_id', kab.id)
+                    .eq('kabupaten_id', kab.id) // TypeScript kini tahu kab pasti tidak null
                     .eq('dukcapil_name', titik.dukcapil)
                     .single();
 
