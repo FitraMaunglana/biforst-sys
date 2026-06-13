@@ -67,11 +67,17 @@ export default function DashboardPage() {
         `);
 
       if (error) throw error;
+
       if (data) {
-        setTitikList(data as any);
+        const rawData = data as any[]; // Menjinakkan TypeScript dengan 'any'
+        setTitikList(rawData);
+
         // Set otomatis kabupaten pertama sebagai default aktif jika belum ada yang dipilih
-        if (data.length > 0 && !selectedKabupaten) {
-          const firstKab = data[0].kabupatens?.name;
+        if (rawData.length > 0 && !selectedKabupaten) {
+          const kabData = rawData[0].kabupatens;
+          // Aman dieksekusi di runtime, baik terbaca sebagai Array maupun Object
+          const firstKab = Array.isArray(kabData) ? kabData[0]?.name : kabData?.name;
+
           if (firstKab) setSelectedKabupaten(firstKab);
         }
       }
@@ -380,9 +386,9 @@ export default function DashboardPage() {
                               disabled={isUpdatingStatusId === titik.id}
                               onChange={(e) => handleStatusChange(titik.id, e.target.value)}
                               className={`text-xs font-bold px-2 py-1.5 rounded-lg border bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 w-full text-center cursor-pointer ${titik.status === 'Sudah Aman' ? 'text-teal-700 border-teal-200 bg-teal-50' :
-                                  titik.status === 'Kontrak' ? 'text-emerald-700 border-emerald-200 bg-emerald-50' :
-                                    titik.status === 'Dealing' ? 'text-amber-700 border-amber-200 bg-amber-50' :
-                                      'text-slate-700 border-slate-200'
+                                titik.status === 'Kontrak' ? 'text-emerald-700 border-emerald-200 bg-emerald-50' :
+                                  titik.status === 'Dealing' ? 'text-amber-700 border-amber-200 bg-amber-50' :
+                                    'text-slate-700 border-slate-200'
                                 }`}
                             >
                               {PIPELINE_STATUSES.map((statusOpt, i) => (
