@@ -3,25 +3,12 @@ import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '../src/lib/supabaseClient';
 import TransactionForm from '../src/components/TransactionForm';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 import {
-  Layers,
-  TrendingUp,
-  MapPin,
-  Users,
-  Database,
-  Lock,
-  RefreshCcw,
-  BarChart3,
-  DollarSign,
-  Briefcase,
-  CheckCircle2,
-  Map,
-  Clock,
-  User,
-  FileText,
-  ArrowUpRight,
-  ArrowDownLeft,
-  Wallet
+  Layers, TrendingUp, MapPin, Users, Database, Lock, RefreshCcw, BarChart3,
+  DollarSign, Briefcase, CheckCircle2, Map, Clock, User, FileText, ArrowUpRight,
+  ArrowDownLeft, Wallet, Download, Eye, X
 } from 'lucide-react';
 
 interface TitikData {
@@ -58,14 +45,14 @@ export default function DashboardPage() {
   const [selectedKabupaten, setSelectedKabupaten] = useState<string | null>(null);
   const [isUpdatingStatusId, setIsUpdatingStatusId] = useState<string | null>(null);
 
-  // State Data Jurnal Kas
+  // State Data Jurnal Kas & Pratinjau PDF
   const [transactions, setTransactions] = useState<any[]>([]);
   const [kasBalance, setKasBalance] = useState({ masuk: 0, keluar: 0, saldo: 0 });
+  const [previewReportPdf, setPreviewReportPdf] = useState<{ url: string; doc: any; fileName: string } | null>(null);
 
   const fetchDashboardData = async () => {
     setIsLoading(true);
     try {
-      // 1. Fetch Data Proyek (Titik Lokasi)
       const { data: projData, error: projErr } = await supabase
         .from('titik_lokasi')
         .select(`
@@ -86,7 +73,6 @@ export default function DashboardPage() {
         }
       }
 
-      // 2. Fetch Data Jurnal Kas
       await fetchKasData();
 
     } catch (err) {
@@ -114,7 +100,6 @@ export default function DashboardPage() {
         let totalKeluar = 0;
 
         const formattedTx = txData.map(tx => {
-          // Cari entri yang berhubungan dengan akun Kas Induk (acc-kas-101)
           const kasEntry = tx.journal_entries.find((je: any) => je.account_id === 'acc-kas-101');
           let type = 'Unknown';
           let amount = 0;
@@ -130,16 +115,11 @@ export default function DashboardPage() {
               totalKeluar += amount;
             }
           }
-
           return { ...tx, type, amount };
         });
 
         setTransactions(formattedTx);
-        setKasBalance({
-          masuk: totalMasuk,
-          keluar: totalKeluar,
-          saldo: totalMasuk - totalKeluar
-        });
+        setKasBalance({ masuk: totalMasuk, keluar: totalKeluar, saldo: totalMasuk - totalKeluar });
       }
     } catch (err) {
       console.error("Gagal memuat mutasi kas:", err);
@@ -175,6 +155,141 @@ export default function DashboardPage() {
       setIsUpdatingStatusId(null);
     }
   };
+
+  const formatDateIndo = (dateStr: string) => {
+    const months = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
+    const d = new Date(dateStr);
+    return `${d.getDate()} ${months[d.getMonth()]} ${d.getFullYear()}`;
+  };
+
+  // =========================================================================
+  // FUNGSI GENERATOR PDF LAPORAN KAS (PRATINJAU DULU)
+  // =========================================================================
+  const handlePreviewReport = async () => {
+    setIsLoading(true);
+    try {
+      const doc = new jsPDF();
+      const primaryColor: [number, number, number] = [22, 50, 79];
+
+      const loadImage = (src: string) => {
+        return new Promise<HTMLImageElement | null>((resolve) => {
+          const img = new Image();
+          img.src = src;
+          img.onload = () => resolve(img);
+          img.onerror = () => resolve(null);
+        });
+      };
+
+      const stempelImg = await loadImage('/stempel_scan.png');
+      const ttdImg = await loadImage('/tanda_tangan.jpg');
+
+      // --- HEADER LAPORAN ---
+      doc.setFontSize(22);
+      doc.setFont("helvetica", "bold");
+      doc.setTextColor(...primaryColor);
+      doc.text("LAPORAN MUTASI KAS & KEUANGAN", 14, 22);
+
+      doc.setFontSize(10);
+      doc.setTextColor(50);
+      doc.text("BTS Biforst Technology Solution", 14, 29);
+      doc.setFont("helvetica", "normal");
+      doc.text("Kabupaten Sleman, Daerah Istimewa Yogyakarta", 14, 34);
+
+      doc.setFontSize(9);
+      doc.setTextColor(100);
+      doc.text(`Dicetak pada: ${formatDateIndo(new Date().toISOString())}`, 196, 29, { align: 'right' });
+
+      doc.setDrawColor(...primaryColor);
+      doc.setLineWidth(0.8);
+      doc.line(14, 40, 196, 40);
+
+      // --- KOTAK RINGKASAN SALDO ---
+      doc.setFillColor(245, 247, 250);
+      doc.rect(14, 46, 182, 26, 'F');
+
+      doc.setFontSize(10);
+      doc.setFont("helvetica", "bold");
+      doc.setTextColor(30);
+      doc.text("RINGKASAN PERIODE", 18, 54);
+
+      doc.setFontSize(9);
+      doc.setFont("helvetica", "normal");
+      doc.text("Total Pemasukan Kas", 18, 61);
+      doc.text("Total Pengeluaran Kas", 18, 67);
+
+      doc.setFont("helvetica", "bold");
+      doc.setTextColor(15, 110, 86);
+      doc.text(`: Rp ${kasBalance.masuk.toLocaleString('id-ID')}`, 56, 61);
+      doc.setTextColor(225, 29, 72);
+      doc.text(`: Rp ${kasBalance.keluar.toLocaleString('id-ID')}`, 56, 67);
+
+      doc.setFontSize(11);
+      doc.setTextColor(100);
+      doc.text("SALDO AKTUAL:", 120, 58);
+      doc.setFontSize(14);
+      doc.setTextColor(...primaryColor);
+      doc.text(`Rp ${kasBalance.saldo.toLocaleString('id-ID')}`, 120, 65);
+
+      // --- TABEL MUTASI ---
+      const tableRows = transactions.map((tx, i) => [
+        i + 1,
+        formatDateIndo(tx.date),
+        tx.reference_code,
+        tx.description,
+        tx.type === 'Masuk' ? `Rp ${tx.amount.toLocaleString('id-ID')}` : '-',
+        tx.type === 'Keluar' ? `Rp ${tx.amount.toLocaleString('id-ID')}` : '-'
+      ]);
+
+      autoTable(doc, {
+        startY: 78,
+        head: [['No', 'Tanggal', 'No. Referensi', 'Keterangan Transaksi', 'Kas Masuk', 'Kas Keluar']],
+        body: tableRows,
+        theme: 'grid',
+        styles: { fontSize: 8, textColor: [50, 50, 50], cellPadding: 3 },
+        headStyles: { fillColor: primaryColor, textColor: 255, fontStyle: 'bold' },
+        columnStyles: {
+          0: { halign: 'center', cellWidth: 10 },
+          4: { halign: 'right', cellWidth: 28 },
+          5: { halign: 'right', cellWidth: 28 }
+        }
+      });
+
+      // --- FOOTER & TANDA TANGAN ---
+      const finalY = (doc as any).lastAutoTable.finalY + 15;
+
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(9);
+      doc.setTextColor(50);
+      doc.text(`Sleman, ${formatDateIndo(new Date().toISOString())}`, 196, finalY, { align: "right" });
+      doc.text("Mengetahui,", 196, finalY + 5, { align: "right" });
+
+      if (ttdImg) doc.addImage(ttdImg, 'JPEG', 160, finalY + 6, 38, 20);
+
+      doc.setFont("helvetica", "bold");
+      doc.setTextColor(0);
+      doc.text("Fitra Maulana, S.Tr.T.", 196, finalY + 34, { align: "right" });
+      doc.setFont("helvetica", "normal");
+      doc.setTextColor(100);
+      doc.text("Direktur BTS", 196, finalY + 38, { align: "right" });
+
+      if (stempelImg) doc.addImage(stempelImg, 'PNG', 146, finalY - 4, 42, 42);
+
+      // --- BUAT PRATINJAU ---
+      const pdfBlob = doc.output('blob');
+      const pdfUrl = URL.createObjectURL(pdfBlob);
+      const fileId = `Laporan_Kas_BTS_${new Date().toISOString().split('T')[0]}.pdf`;
+
+      setPreviewReportPdf({ url: pdfUrl, doc, fileName: fileId });
+
+    } catch (error) {
+      console.error(error);
+      alert("Terjadi kesalahan saat memproses laporan.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const formatIDR = (num: number) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(num);
 
   if (isCheckingAuth) {
     return (
@@ -221,10 +336,6 @@ export default function DashboardPage() {
     return name === selectedKabupaten;
   });
 
-  const formatIDR = (num: number) => {
-    return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(num);
-  };
-
   return (
     <div className="min-h-screen bg-slate-50 text-slate-800 font-sans">
       <nav className="sticky top-0 z-40 bg-slate-900 border-b border-slate-800 text-white shadow-sm">
@@ -269,9 +380,7 @@ export default function DashboardPage() {
         </div>
 
         {activeTab === 'proyek' ? (
-          /* =======================================
-             TAB 1: KOMANDO PROYEK (Sudah Sempurna)
-             ======================================= */
+          /* TAB 1: KOMANDO PROYEK */
           <>
             <div className="grid grid-cols-1 md:grid-cols-4 gap-5">
               <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm relative overflow-hidden">
@@ -306,11 +415,6 @@ export default function DashboardPage() {
                   const colors = ['bg-slate-300', 'bg-blue-400', 'bg-purple-400', 'bg-amber-400', 'bg-emerald-400', 'bg-teal-500'];
                   return pct > 0 ? <div key={idx} className={`${colors[idx]} h-full transition-all duration-300`} style={{ width: `${pct}%` }} /> : null;
                 })}
-              </div>
-              <div className="flex flex-wrap gap-x-4 gap-y-1.5 text-[11px] font-mono text-slate-500">
-                <div className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-slate-300"></span> Belum Mulai ({statusCounts['Belum Mulai'] || 0})</div>
-                <div className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-blue-400"></span> Pitching ({statusCounts['Pitching'] || 0})</div>
-                <div className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-400"></span> Kontrak ({statusCounts['Kontrak'] || 0})</div>
               </div>
             </div>
 
@@ -368,12 +472,9 @@ export default function DashboardPage() {
             </div>
           </>
         ) : (
-          /* =======================================
-             TAB 2: JURNAL KAS KEUANGAN (UPDATE BARU)
-             ======================================= */
+          /* TAB 2: JURNAL KAS KEUANGAN */
           <div className="space-y-6">
 
-            {/* 1. KARTU SALDO VISUAL */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
               <div className="bg-emerald-500 rounded-2xl p-6 text-white shadow-lg shadow-emerald-500/20 relative overflow-hidden">
                 <ArrowDownLeft className="w-24 h-24 absolute -right-4 -bottom-4 opacity-10" />
@@ -394,18 +495,31 @@ export default function DashboardPage() {
 
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
 
-              {/* 2. TABEL RIWAYAT TRANSAKSI */}
               <div className="lg:col-span-7 bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-                <div className="p-5 border-b border-slate-100 flex items-center justify-between">
+                <div className="p-5 border-b border-slate-100 flex flex-wrap items-center justify-between gap-3">
                   <h3 className="font-bold text-slate-900 text-sm flex items-center gap-2">
-                    <Database className="w-4 h-4 text-indigo-600" /> Buku Mutasi Kas Induk (Buku Besar)
+                    <Database className="w-4 h-4 text-indigo-600" /> Buku Mutasi Kas Induk
                   </h3>
-                  <button onClick={fetchKasData} className="text-slate-400 hover:text-indigo-600"><RefreshCcw className="w-4 h-4" /></button>
+
+                  {/* TOMBOL EKSPOR LAPORAN BARU (PRD KEU-03) */}
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={handlePreviewReport}
+                      disabled={isLoading}
+                      className="px-3 py-1.5 bg-indigo-50 text-indigo-700 hover:bg-indigo-600 hover:text-white border border-indigo-200 font-bold text-[11px] rounded-lg transition flex items-center gap-1.5"
+                    >
+                      {isLoading ? <RefreshCcw className="w-3 h-3 animate-spin" /> : <Eye className="w-3 h-3" />}
+                      Pratinjau Laporan PDF
+                    </button>
+                    <button onClick={fetchKasData} className="text-slate-400 hover:text-indigo-600 p-1.5 bg-slate-50 border border-slate-200 rounded-lg">
+                      <RefreshCcw className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
                 </div>
 
-                <div className="overflow-x-auto">
+                <div className="overflow-x-auto max-h-[500px] overflow-y-auto">
                   <table className="w-full text-left text-xs">
-                    <thead className="bg-slate-50 text-slate-500 font-bold uppercase tracking-wider">
+                    <thead className="bg-slate-50 text-slate-500 font-bold uppercase tracking-wider sticky top-0">
                       <tr>
                         <th className="px-4 py-3">Tanggal & Ref</th>
                         <th className="px-4 py-3">Keterangan Transaksi</th>
@@ -421,7 +535,7 @@ export default function DashboardPage() {
                             <td className="px-4 py-3 align-top whitespace-nowrap">
                               <div className="font-semibold text-slate-800 flex items-center gap-1.5">
                                 {tx.type === 'Masuk' ? <ArrowDownLeft className="w-3 h-3 text-emerald-500" /> : <ArrowUpRight className="w-3 h-3 text-rose-500" />}
-                                {tx.date}
+                                {formatDateIndo(tx.date)}
                               </div>
                               <div className="text-[10px] text-slate-400 font-mono mt-0.5">{tx.reference_code}</div>
                             </td>
@@ -441,9 +555,7 @@ export default function DashboardPage() {
                 </div>
               </div>
 
-              {/* 3. FORM INPUT KAS MANUAL */}
               <div className="lg:col-span-5 relative">
-                {/* Menggunakan komponen TransactionForm yang sudah kita buat sebelumnya */}
                 <TransactionForm onSuccess={() => fetchKasData()} />
               </div>
 
@@ -451,6 +563,37 @@ export default function DashboardPage() {
           </div>
         )}
       </main>
+
+      {/* MODAL PRATINJAU PDF LAPORAN KAS */}
+      {previewReportPdf && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-4xl h-[90vh] flex flex-col overflow-hidden">
+            <div className="bg-slate-900 p-4 flex items-center justify-between text-white shrink-0">
+              <h3 className="font-bold flex items-center gap-2">
+                <FileText className="w-5 h-5 text-indigo-400" /> Pratinjau Laporan Mutasi Kas & Keuangan
+              </h3>
+              <div className="flex items-center gap-4">
+                <button
+                  onClick={() => previewReportPdf.doc.save(previewReportPdf.fileName)}
+                  className="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold rounded-lg flex items-center gap-2 transition"
+                >
+                  <Download className="w-4 h-4" /> Simpan & Unduh Laporan
+                </button>
+                <button onClick={() => setPreviewReportPdf(null)} className="text-slate-400 hover:text-white transition" title="Tutup Preview">
+                  <X className="w-6 h-6" />
+                </button>
+              </div>
+            </div>
+            <div className="flex-1 bg-slate-200 relative">
+              <iframe
+                src={previewReportPdf.url}
+                className="w-full h-full border-none absolute inset-0"
+                title="Report Preview"
+              />
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
