@@ -15,11 +15,13 @@ import {
   DollarSign,
   Briefcase,
   CheckCircle2,
-  ChevronRight,
   Map,
   Clock,
   User,
-  FileText
+  FileText,
+  ArrowUpRight,
+  ArrowDownLeft,
+  Wallet
 } from 'lucide-react';
 
 interface TitikData {
@@ -51,15 +53,20 @@ export default function DashboardPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<'proyek' | 'kas'>('proyek');
 
-  // State Data Titik & Interaksi Wilayah
+  // State Data Proyek
   const [titikList, setTitikList] = useState<TitikData[]>([]);
   const [selectedKabupaten, setSelectedKabupaten] = useState<string | null>(null);
   const [isUpdatingStatusId, setIsUpdatingStatusId] = useState<string | null>(null);
 
+  // State Data Jurnal Kas
+  const [transactions, setTransactions] = useState<any[]>([]);
+  const [kasBalance, setKasBalance] = useState({ masuk: 0, keluar: 0, saldo: 0 });
+
   const fetchDashboardData = async () => {
     setIsLoading(true);
     try {
-      const { data, error } = await supabase
+      // 1. Fetch Data Proyek (Titik Lokasi)
+      const { data: projData, error: projErr } = await supabase
         .from('titik_lokasi')
         .select(`
           id, status, dukcapil_name, address, coordinates, isp_name, notes, kabupaten_id,
@@ -67,25 +74,75 @@ export default function DashboardPage() {
           titik_harga ( modal_mrc, modal_cst, harga_jual_mrc, harga_jual_cst )
         `);
 
-      if (error) throw error;
+      if (projErr) throw projErr;
 
-      if (data) {
-        const rawData = data as any[]; // Menjinakkan TypeScript dengan 'any'
+      if (projData) {
+        const rawData = projData as any[];
         setTitikList(rawData);
-
-        // Set otomatis kabupaten pertama sebagai default aktif jika belum ada yang dipilih
         if (rawData.length > 0 && !selectedKabupaten) {
           const kabData = rawData[0].kabupatens;
-          // Aman dieksekusi di runtime, baik terbaca sebagai Array maupun Object
           const firstKab = Array.isArray(kabData) ? kabData[0]?.name : kabData?.name;
-
           if (firstKab) setSelectedKabupaten(firstKab);
         }
       }
+
+      // 2. Fetch Data Jurnal Kas
+      await fetchKasData();
+
     } catch (err) {
       console.error("Gagal memuat data komando proyek:", err);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const fetchKasData = async () => {
+    try {
+      const { data: txData, error: txErr } = await supabase
+        .from('transactions')
+        .select(`
+          id, date, description, reference_code, created_at,
+          journal_entries ( account_id, debit, credit )
+        `)
+        .order('date', { ascending: false })
+        .order('created_at', { ascending: false });
+
+      if (txErr) throw txErr;
+
+      if (txData) {
+        let totalMasuk = 0;
+        let totalKeluar = 0;
+
+        const formattedTx = txData.map(tx => {
+          // Cari entri yang berhubungan dengan akun Kas Induk (acc-kas-101)
+          const kasEntry = tx.journal_entries.find((je: any) => je.account_id === 'acc-kas-101');
+          let type = 'Unknown';
+          let amount = 0;
+
+          if (kasEntry) {
+            if (kasEntry.debit > 0) {
+              type = 'Masuk';
+              amount = kasEntry.debit;
+              totalMasuk += amount;
+            } else if (kasEntry.credit > 0) {
+              type = 'Keluar';
+              amount = kasEntry.credit;
+              totalKeluar += amount;
+            }
+          }
+
+          return { ...tx, type, amount };
+        });
+
+        setTransactions(formattedTx);
+        setKasBalance({
+          masuk: totalMasuk,
+          keluar: totalKeluar,
+          saldo: totalMasuk - totalKeluar
+        });
+      }
+    } catch (err) {
+      console.error("Gagal memuat mutasi kas:", err);
     }
   };
 
@@ -102,26 +159,17 @@ export default function DashboardPage() {
     initDashboard();
   }, [router]);
 
-  // FUNGSI UPDATE STATUS TITIK DARI LAPANGAN (PRD PRJ-03)
   const handleStatusChange = async (titikId: string, newStatus: string) => {
     setIsUpdatingStatusId(titikId);
     try {
       const { error } = await supabase
         .from('titik_lokasi')
-        .update({
-          status: newStatus,
-          last_updated_at: new Date().toISOString()
-        })
+        .update({ status: newStatus })
         .eq('id', titikId);
 
       if (error) throw error;
-
-      // Perbarui state lokal secara instan agar UI terasa sangat cepat
-      setTitikList(prev => prev.map(item =>
-        item.id === titikId ? { ...item, status: newStatus } : item
-      ));
+      setTitikList(prev => prev.map(item => item.id === titikId ? { ...item, status: newStatus } : item));
     } catch (err) {
-      console.error("Gagal memperbarui status titik:", err);
       alert("Gagal memperbarui status. Periksa jaringan Anda.");
     } finally {
       setIsUpdatingStatusId(null);
@@ -139,53 +187,39 @@ export default function DashboardPage() {
     );
   }
 
-  // --- LOGIKA AGREGASI METRIK DATA RIIL ---
+  // --- Kalkulasi Metrik Proyek ---
   const totalTitik = titikList.length;
-
   const statusCounts = titikList.reduce((acc: Record<string, number>, item) => {
     acc[item.status] = (acc[item.status] || 0) + 1;
     return acc;
   }, {});
 
   let totalProyeksiProfit1Tahun = 0;
-  let totalProyeksiPendapatan1Tahun = 0;
-
   titikList.forEach(item => {
     if (item.titik_harga) {
-      const hjMRC = Number(item.titik_harga.harga_jual_mrc) || 0;
-      const hjCST = Number(item.titik_harga.harga_jual_cst) || 0;
-      const mdMRC = Number(item.titik_harga.modal_mrc) || 0;
-      const mdCST = Number(item.titik_harga.modal_cst) || 0;
-
-      const pendapatan = (hjMRC * 12) + hjCST;
-      const modal = (mdMRC * 12) + mdCST;
-
-      totalProyeksiPendapatan1Tahun += pendapatan;
+      const harga = Array.isArray(item.titik_harga) ? item.titik_harga[0] : item.titik_harga;
+      const pendapatan = (Number(harga?.harga_jual_mrc) * 12) + Number(harga?.harga_jual_cst);
+      const modal = (Number(harga?.modal_mrc) * 12) + Number(harga?.modal_cst);
       totalProyeksiProfit1Tahun += (pendapatan - modal);
     }
   });
 
-  const avgMarginPercentage = totalProyeksiPendapatan1Tahun > 0
-    ? (totalProyeksiProfit1Tahun / totalProyeksiPendapatan1Tahun) * 100
-    : 0;
-
-  // Grup Agregat per Kabupaten
   const kabupatenAgregat = titikList.reduce((acc: Record<string, any>, item) => {
-    const kabName = item.kabupatens?.name || 'Unknown';
-    const picName = item.kabupatens?.pic_name || 'Unassigned';
+    const kabData = item.kabupatens;
+    const kabName = Array.isArray(kabData) ? kabData[0]?.name : kabData?.name || 'Unknown';
+    const picName = Array.isArray(kabData) ? kabData[0]?.pic_name : kabData?.pic_name || 'Unassigned';
 
-    if (!acc[kabName]) {
-      acc[kabName] = { name: kabName, pic: picName, total: 0, aman: 0 };
-    }
+    if (!acc[kabName]) acc[kabName] = { name: kabName, pic: picName, total: 0, aman: 0 };
     acc[kabName].total += 1;
-    if (item.status === 'Sudah Aman' || item.status === 'Kontrak') {
-      acc[kabName].aman += 1;
-    }
+    if (item.status === 'Sudah Aman' || item.status === 'Kontrak') acc[kabName].aman += 1;
     return acc;
   }, {});
 
-  // Ambil titik khusus untuk kabupaten yang sedang dipilih/aktif di layar
-  const filteredTitikByKabupaten = titikList.filter(t => t.kabupatens?.name === selectedKabupaten);
+  const filteredTitikByKabupaten = titikList.filter(t => {
+    const kabData = t.kabupatens;
+    const name = Array.isArray(kabData) ? kabData[0]?.name : kabData?.name;
+    return name === selectedKabupaten;
+  });
 
   const formatIDR = (num: number) => {
     return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(num);
@@ -193,7 +227,6 @@ export default function DashboardPage() {
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-800 font-sans">
-      {/* Top Navbar */}
       <nav className="sticky top-0 z-40 bg-slate-900 border-b border-slate-800 text-white shadow-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -208,19 +241,12 @@ export default function DashboardPage() {
           </div>
 
           <div className="flex items-center gap-4">
-            <button
-              onClick={fetchDashboardData}
-              className="p-2 text-slate-400 hover:text-white bg-slate-800 border border-slate-700/60 rounded-xl transition"
-              title="Sinkronisasi Data Eksternal"
-            >
+            <button onClick={fetchDashboardData} className="p-2 text-slate-400 hover:text-white bg-slate-800 rounded-xl transition">
               <RefreshCcw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
             </button>
             <button
-              onClick={async () => {
-                await supabase.auth.signOut();
-                router.push('/login');
-              }}
-              className="text-xs text-rose-400 hover:text-rose-300 font-medium transition px-3 py-1.5 border border-rose-500/20 rounded-lg hover:bg-rose-500/10"
+              onClick={async () => { await supabase.auth.signOut(); router.push('/login'); }}
+              className="text-xs text-rose-400 font-medium px-3 py-1.5 border border-rose-500/20 rounded-lg hover:bg-rose-500/10"
             >
               Keluar
             </button>
@@ -228,106 +254,67 @@ export default function DashboardPage() {
         </div>
       </nav>
 
-      {/* Main Container */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
 
-        {/* Tab Switcher */}
-        <div className="flex bg-slate-200/60 p-1.5 rounded-xl max-w-sm border border-slate-200">
-          <button
-            onClick={() => setActiveTab('proyek')}
-            className={`flex-1 flex items-center justify-center gap-2 py-2 text-xs font-bold rounded-lg transition ${activeTab === 'proyek' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600 hover:text-slate-900'}`}
-          >
-            <Briefcase className="w-4 h-4" />
-            Komando Proyek
+        <div className="flex bg-slate-200/60 p-1.5 rounded-xl max-w-2xl border border-slate-200">
+          <button onClick={() => setActiveTab('proyek')} className={`flex-1 flex items-center justify-center gap-2 py-2 text-xs font-bold rounded-lg transition ${activeTab === 'proyek' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600 hover:text-slate-900'}`}>
+            <Briefcase className="w-4 h-4" /> Komando Proyek
           </button>
-          <button
-            onClick={() => setActiveTab('kas')}
-            className={`flex-1 flex items-center justify-center gap-2 py-2 text-xs font-bold rounded-lg transition ${activeTab === 'kas' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600 hover:text-slate-900'}`}
-          >
-            <DollarSign className="w-4 h-4" />
-            Jurnal Kas Keuangan
+          <button onClick={() => setActiveTab('kas')} className={`flex-1 flex items-center justify-center gap-2 py-2 text-xs font-bold rounded-lg transition ${activeTab === 'kas' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600 hover:text-slate-900'}`}>
+            <DollarSign className="w-4 h-4" /> Jurnal Kas Keuangan
           </button>
-          <button
-            onClick={() => router.push('/invoices')}
-            className={`flex-1 flex items-center justify-center gap-2 py-2 text-xs font-bold rounded-lg transition text-slate-600 hover:text-indigo-600 hover:bg-indigo-50 border border-transparent hover:border-indigo-100`}
-          >
-            <FileText className="w-4 h-4" />
-            Penagihan Mitra
+          <button onClick={() => router.push('/invoices')} className={`flex-1 flex items-center justify-center gap-2 py-2 text-xs font-bold rounded-lg transition text-slate-600 hover:text-indigo-600 hover:bg-indigo-50`}>
+            <FileText className="w-4 h-4" /> Penagihan Mitra
           </button>
         </div>
 
         {activeTab === 'proyek' ? (
+          /* =======================================
+             TAB 1: KOMANDO PROYEK (Sudah Sempurna)
+             ======================================= */
           <>
-            {/* PANEL STATISTIK UTAMA */}
             <div className="grid grid-cols-1 md:grid-cols-4 gap-5">
               <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm relative overflow-hidden">
-                <div className="absolute right-4 top-4 p-2 bg-indigo-50 text-indigo-600 rounded-xl">
-                  <MapPin className="w-5 h-5" />
-                </div>
+                <div className="absolute right-4 top-4 p-2 bg-indigo-50 text-indigo-600 rounded-xl"><MapPin className="w-5 h-5" /></div>
                 <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Total Ekspansi Titik</p>
                 <h3 className="text-2xl font-black mt-1 text-slate-900">{totalTitik} <span className="text-xs text-slate-400 font-normal">Lokasi</span></h3>
-                <p className="text-[11px] text-slate-500 font-mono mt-2 border-t border-slate-100 pt-2">Mitra: PT Comtelindo</p>
               </div>
-
               <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm relative overflow-hidden">
-                <div className="absolute right-4 top-4 p-2 bg-emerald-50 text-emerald-600 rounded-xl">
-                  <TrendingUp className="w-5 h-5" />
-                </div>
+                <div className="absolute right-4 top-4 p-2 bg-emerald-50 text-emerald-600 rounded-xl"><TrendingUp className="w-5 h-5" /></div>
                 <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Proyeksi Profit 1 Thn</p>
                 <h3 className="text-2xl font-black mt-1 text-emerald-600">{formatIDR(totalProyeksiProfit1Tahun)}</h3>
-                <p className="text-[11px] text-emerald-600 font-medium mt-2 border-t border-slate-100 pt-2 flex items-center gap-1">
-                  <BarChart3 className="w-3 h-3" /> Margin Netto: {avgMarginPercentage.toFixed(1)}%
-                </p>
               </div>
-
               <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm relative overflow-hidden">
-                <div className="absolute right-4 top-4 p-2 bg-amber-50 text-amber-600 rounded-xl">
-                  <CheckCircle2 className="w-5 h-5" />
-                </div>
+                <div className="absolute right-4 top-4 p-2 bg-amber-50 text-amber-600 rounded-xl"><CheckCircle2 className="w-5 h-5" /></div>
                 <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Tahap Dealing</p>
                 <h3 className="text-2xl font-black mt-1 text-amber-600">{statusCounts['Dealing'] || 0} <span className="text-xs text-slate-400 font-normal">Titik</span></h3>
-                <p className="text-[11px] text-slate-500 font-mono mt-2 border-t border-slate-100 pt-2">Progres Lapangan Tinggi</p>
               </div>
-
               <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm relative overflow-hidden">
-                <div className="absolute right-4 top-4 p-2 bg-slate-100 text-slate-600 rounded-xl">
-                  <Layers className="w-5 h-5" />
-                </div>
+                <div className="absolute right-4 top-4 p-2 bg-slate-100 text-slate-600 rounded-xl"><Layers className="w-5 h-5" /></div>
                 <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Belum Dimulai</p>
                 <h3 className="text-2xl font-black mt-1 text-slate-700">{statusCounts['Belum Mulai'] || 0} <span className="text-xs text-slate-400 font-normal">Titik</span></h3>
-                <p className="text-[11px] text-slate-500 font-mono mt-2 border-t border-slate-100 pt-2">Menunggu Survei TIKOR</p>
               </div>
             </div>
 
-            {/* PIPELINE VISUAL STATUS BAR */}
             <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-3">
               <h3 className="font-bold text-slate-900 text-xs uppercase tracking-wider text-slate-400 flex items-center gap-2">
                 <BarChart3 className="w-4 h-4 text-indigo-600" /> Ringkasan Pipeline Nasional
               </h3>
               <div className="w-full h-3 bg-slate-100 rounded-full flex overflow-hidden">
                 {PIPELINE_STATUSES.map((st, idx) => {
-                  const count = statusCounts[st] || 0;
-                  const pct = totalTitik > 0 ? (count / totalTitik) * 100 : 0;
+                  const pct = totalTitik > 0 ? ((statusCounts[st] || 0) / totalTitik) * 100 : 0;
                   const colors = ['bg-slate-300', 'bg-blue-400', 'bg-purple-400', 'bg-amber-400', 'bg-emerald-400', 'bg-teal-500'];
-                  return pct > 0 ? (
-                    <div key={idx} className={`${colors[idx]} h-full transition-all duration-300`} style={{ width: `${pct}%` }} />
-                  ) : null;
+                  return pct > 0 ? <div key={idx} className={`${colors[idx]} h-full transition-all duration-300`} style={{ width: `${pct}%` }} /> : null;
                 })}
               </div>
               <div className="flex flex-wrap gap-x-4 gap-y-1.5 text-[11px] font-mono text-slate-500">
                 <div className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-slate-300"></span> Belum Mulai ({statusCounts['Belum Mulai'] || 0})</div>
                 <div className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-blue-400"></span> Pitching ({statusCounts['Pitching'] || 0})</div>
-                <div className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-purple-400"></span> Coverage ({statusCounts['Coverage'] || 0})</div>
-                <div className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-amber-400"></span> Dealing ({statusCounts['Dealing'] || 0})</div>
                 <div className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-400"></span> Kontrak ({statusCounts['Kontrak'] || 0})</div>
-                <div className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-teal-500"></span> Aman ({statusCounts['Sudah Aman'] || 0})</div>
               </div>
             </div>
 
-            {/* INTERACTIVE WORKSPACE GRID */}
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-
-              {/* SEKTOR KIRI: DAFTAR KABUPATEN (SELEKTOR INTERAKTIF) */}
               <div className="lg:col-span-5 bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-4">
                 <h3 className="font-bold text-slate-900 text-sm flex items-center gap-2 border-b border-slate-100 pb-2">
                   <Map className="w-4 h-4 text-indigo-600" /> Pilih Wilayah Kerja
@@ -335,25 +322,17 @@ export default function DashboardPage() {
                 <div className="space-y-2 max-h-[500px] overflow-y-auto pr-1">
                   {Object.values(kabupatenAgregat).map((kab: any, i) => {
                     const isSelected = selectedKabupaten === kab.name;
-                    const rasio = kab.total > 0 ? (kab.aman / kab.total) * 100 : 0;
                     return (
                       <button
-                        key={i}
-                        onClick={() => setSelectedKabupaten(kab.name)}
-                        className={`w-full text-left p-3.5 rounded-xl border transition duration-150 flex items-center justify-between group ${isSelected ? 'bg-indigo-600 border-indigo-600 text-white shadow-md shadow-indigo-600/10' : 'bg-slate-50 border-slate-200/70 hover:bg-slate-100 text-slate-800'}`}
+                        key={i} onClick={() => setSelectedKabupaten(kab.name)}
+                        className={`w-full text-left p-3.5 rounded-xl border transition flex justify-between ${isSelected ? 'bg-indigo-600 border-indigo-600 text-white shadow-md' : 'bg-slate-50 border-slate-200 hover:bg-slate-100'}`}
                       >
-                        <div className="space-y-1 max-w-[80%]">
-                          <h4 className="font-bold text-xs md:text-sm truncate">{kab.name}</h4>
-                          <p className={`text-[11px] font-mono flex items-center gap-1 ${isSelected ? 'text-indigo-200' : 'text-slate-400'}`}>
-                            <User className="w-3 h-3" /> PIC: {kab.pic}
-                          </p>
+                        <div>
+                          <h4 className="font-bold text-sm truncate">{kab.name}</h4>
+                          <p className={`text-[11px] font-mono flex items-center gap-1 ${isSelected ? 'text-indigo-200' : 'text-slate-400'}`}>PIC: {kab.pic}</p>
                         </div>
-                        <div className="text-right flex items-center gap-2 shrink-0">
-                          <div className="space-y-0.5">
-                            <span className={`text-xs block font-bold font-mono ${isSelected ? 'text-white' : 'text-slate-900'}`}>{kab.total} Titik</span>
-                            <span className={`text-[10px] block font-semibold ${isSelected ? 'text-indigo-200' : 'text-emerald-600'}`}>{kab.aman} Aman</span>
-                          </div>
-                          <ChevronRight className={`w-4 h-4 opacity-50 group-hover:opacity-100 transition ${isSelected ? 'text-white' : 'text-slate-400'}`} />
+                        <div className="text-right">
+                          <span className="text-xs block font-bold font-mono">{kab.total} Titik</span>
                         </div>
                       </button>
                     );
@@ -361,77 +340,117 @@ export default function DashboardPage() {
                 </div>
               </div>
 
-              {/* SEKTOR KANAN: TITIK LOKASI & CONTROLLER STATUS MOBILE-FRIENDLY (PRD PRJ-03) */}
               <div className="lg:col-span-7 bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-4">
-                <div className="border-b border-slate-100 pb-3 flex items-center justify-between flex-wrap gap-2">
-                  <div>
-                    <h3 className="font-bold text-slate-900 text-sm">Eksplorasi Titik: {selectedKabupaten}</h3>
-                    <p className="text-xs text-slate-400 mt-0.5 font-mono">Daftar koordinat lapangan terverifikasi Supabase</p>
-                  </div>
-                  <span className="bg-indigo-50 text-indigo-700 text-[11px] font-bold px-2.5 py-1 rounded-lg border border-indigo-100 font-mono">
-                    {filteredTitikByKabupaten.length} Titik Terdeteksi
-                  </span>
-                </div>
-
+                <h3 className="font-bold text-slate-900 text-sm">Eksplorasi Titik: {selectedKabupaten}</h3>
                 <div className="space-y-3.5 max-h-[480px] overflow-y-auto pr-1">
-                  {filteredTitikByKabupaten.map((titik) => {
-                    return (
-                      <div key={titik.id} className="p-4 rounded-xl border border-slate-200/80 bg-slate-50/50 hover:bg-slate-50 transition relative overflow-hidden group">
-
-                        {/* Header Titik */}
-                        <div className="flex justify-between items-start gap-4">
-                          <div className="space-y-1 max-w-[65%]">
-                            <h4 className="font-bold text-slate-900 text-xs md:text-sm">Kec/Dukcapil: {titik.dukcapil_name}</h4>
-                            <p className="text-[11px] text-slate-500 line-clamp-1" title={titik.address}>{titik.address}</p>
-                            <p className="text-[10px] font-mono text-slate-400">TIKOR: {titik.coordinates}</p>
-                          </div>
-
-                          {/* CONTROLLER SELECT STATUS (PRD PRJ-03) - RESPONSIVE & MOBILE FRIENDLY */}
-                          <div className="w-[35%] text-right shrink-0">
-                            <label className="text-[10px] font-bold font-mono text-slate-400 block mb-1">Update Progres:</label>
-                            <select
-                              value={titik.status}
-                              disabled={isUpdatingStatusId === titik.id}
-                              onChange={(e) => handleStatusChange(titik.id, e.target.value)}
-                              className={`text-xs font-bold px-2 py-1.5 rounded-lg border bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 w-full text-center cursor-pointer ${titik.status === 'Sudah Aman' ? 'text-teal-700 border-teal-200 bg-teal-50' :
-                                titik.status === 'Kontrak' ? 'text-emerald-700 border-emerald-200 bg-emerald-50' :
-                                  titik.status === 'Dealing' ? 'text-amber-700 border-amber-200 bg-amber-50' :
-                                    'text-slate-700 border-slate-200'
-                                }`}
-                            >
-                              {PIPELINE_STATUSES.map((statusOpt, i) => (
-                                <option key={i} value={statusOpt} className="text-slate-900 font-sans text-left font-semibold">{statusOpt}</option>
-                              ))}
-                            </select>
-                          </div>
-                        </div>
-
-                        {/* Footer / Catatan Titik Lapangan */}
-                        <div className="mt-3 pt-2.5 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-400 font-mono">
-                          <span className="flex items-center gap-1"><Clock className="w-3 h-3" /> ISP: {titik.isp_name}</span>
-                          <span className="italic truncate max-w-[60%]" title={titik.notes}>{titik.notes ? `"${titik.notes}"` : 'Tidak ada catatan'}</span>
-                        </div>
+                  {filteredTitikByKabupaten.map((titik) => (
+                    <div key={titik.id} className="p-4 rounded-xl border border-slate-200 bg-slate-50/50 flex justify-between items-start gap-4">
+                      <div className="space-y-1">
+                        <h4 className="font-bold text-slate-900 text-sm">Kec. {titik.dukcapil_name}</h4>
+                        <p className="text-[11px] text-slate-500 line-clamp-1">{titik.address}</p>
                       </div>
-                    );
-                  })}
+                      <div className="w-[35%] text-right shrink-0">
+                        <select
+                          value={titik.status}
+                          disabled={isUpdatingStatusId === titik.id}
+                          onChange={(e) => handleStatusChange(titik.id, e.target.value)}
+                          className="text-xs font-bold px-2 py-1.5 rounded-lg border bg-white focus:ring-2 w-full text-center cursor-pointer"
+                        >
+                          {PIPELINE_STATUSES.map((statusOpt, i) => (
+                            <option key={i} value={statusOpt}>{statusOpt}</option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </div>
-
             </div>
           </>
         ) : (
-          /* TAB MODUL AKUNTANSI KAS OPERASIONAL */
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-            <div className="lg:col-span-12">
-              <TransactionForm onSuccess={() => { }} />
+          /* =======================================
+             TAB 2: JURNAL KAS KEUANGAN (UPDATE BARU)
+             ======================================= */
+          <div className="space-y-6">
+
+            {/* 1. KARTU SALDO VISUAL */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+              <div className="bg-emerald-500 rounded-2xl p-6 text-white shadow-lg shadow-emerald-500/20 relative overflow-hidden">
+                <ArrowDownLeft className="w-24 h-24 absolute -right-4 -bottom-4 opacity-10" />
+                <p className="text-emerald-100 font-medium text-sm">Total Pemasukan Kas</p>
+                <h3 className="text-3xl font-black mt-2 font-mono">{formatIDR(kasBalance.masuk)}</h3>
+              </div>
+              <div className="bg-rose-500 rounded-2xl p-6 text-white shadow-lg shadow-rose-500/20 relative overflow-hidden">
+                <ArrowUpRight className="w-24 h-24 absolute -right-4 -bottom-4 opacity-10" />
+                <p className="text-rose-100 font-medium text-sm">Total Pengeluaran Kas</p>
+                <h3 className="text-3xl font-black mt-2 font-mono">{formatIDR(kasBalance.keluar)}</h3>
+              </div>
+              <div className="bg-slate-900 rounded-2xl p-6 text-white shadow-lg shadow-slate-900/20 relative overflow-hidden border border-slate-700">
+                <Wallet className="w-24 h-24 absolute -right-4 -bottom-4 opacity-10" />
+                <p className="text-slate-400 font-medium text-sm">Saldo Aktual Perusahaan</p>
+                <h3 className="text-3xl font-black mt-2 font-mono text-emerald-400">{formatIDR(kasBalance.saldo)}</h3>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+
+              {/* 2. TABEL RIWAYAT TRANSAKSI */}
+              <div className="lg:col-span-7 bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+                <div className="p-5 border-b border-slate-100 flex items-center justify-between">
+                  <h3 className="font-bold text-slate-900 text-sm flex items-center gap-2">
+                    <Database className="w-4 h-4 text-indigo-600" /> Buku Mutasi Kas Induk (Buku Besar)
+                  </h3>
+                  <button onClick={fetchKasData} className="text-slate-400 hover:text-indigo-600"><RefreshCcw className="w-4 h-4" /></button>
+                </div>
+
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs">
+                    <thead className="bg-slate-50 text-slate-500 font-bold uppercase tracking-wider">
+                      <tr>
+                        <th className="px-4 py-3">Tanggal & Ref</th>
+                        <th className="px-4 py-3">Keterangan Transaksi</th>
+                        <th className="px-4 py-3 text-right">Nominal (Rp)</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {transactions.length === 0 ? (
+                        <tr><td colSpan={3} className="px-4 py-8 text-center text-slate-400">Belum ada riwayat transaksi.</td></tr>
+                      ) : (
+                        transactions.map(tx => (
+                          <tr key={tx.id} className="hover:bg-slate-50 transition group">
+                            <td className="px-4 py-3 align-top whitespace-nowrap">
+                              <div className="font-semibold text-slate-800 flex items-center gap-1.5">
+                                {tx.type === 'Masuk' ? <ArrowDownLeft className="w-3 h-3 text-emerald-500" /> : <ArrowUpRight className="w-3 h-3 text-rose-500" />}
+                                {tx.date}
+                              </div>
+                              <div className="text-[10px] text-slate-400 font-mono mt-0.5">{tx.reference_code}</div>
+                            </td>
+                            <td className="px-4 py-3 align-top text-slate-600 leading-relaxed max-w-[200px]">
+                              {tx.description}
+                            </td>
+                            <td className="px-4 py-3 align-top text-right">
+                              <span className={`font-bold font-mono px-2.5 py-1 rounded bg-slate-50 border ${tx.type === 'Masuk' ? 'text-emerald-600 border-emerald-100' : 'text-rose-600 border-rose-100'}`}>
+                                {tx.type === 'Masuk' ? '+' : '-'} {formatIDR(tx.amount)}
+                              </span>
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* 3. FORM INPUT KAS MANUAL */}
+              <div className="lg:col-span-5 relative">
+                {/* Menggunakan komponen TransactionForm yang sudah kita buat sebelumnya */}
+                <TransactionForm onSuccess={() => fetchKasData()} />
+              </div>
+
             </div>
           </div>
         )}
       </main>
-
-      <footer className="bg-slate-900 text-slate-400 border-t border-slate-800 mt-20 py-6 font-mono text-[11px] text-center">
-        biforst-erp v1.0.0 · Core System Connected to Supabase Engine · Yogyakarta 2026
-      </footer>
     </div>
   );
 }
