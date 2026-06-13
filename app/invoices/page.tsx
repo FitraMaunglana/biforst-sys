@@ -102,9 +102,15 @@ export default function InvoicePage() {
             let subtotalMRC = 0;
             const tableRows: any[] = [];
 
-            titikData.forEach((titik, idx) => {
-                const cst = Number(titik.titik_harga?.harga_jual_cst) || 0;
-                const mrc = Number(titik.titik_harga?.harga_jual_mrc) || 0;
+            // Membypass strict-type TypeScript dengan as any[]
+            const rawTitikData = titikData as any[];
+
+            rawTitikData.forEach((titik, idx) => {
+                // Antisipasi jika Supabase mengembalikan relasi 1-to-1 sebagai Array
+                const harga = Array.isArray(titik.titik_harga) ? titik.titik_harga[0] : titik.titik_harga;
+
+                const cst = Number(harga?.harga_jual_cst) || 0;
+                const mrc = Number(harga?.harga_jual_mrc) || 0;
 
                 let rowCST = '-';
                 let rowMRC = '-';
@@ -152,7 +158,7 @@ export default function InvoicePage() {
 
             if (invErr) throw invErr;
 
-            await generatePDF(invNumber, issueDate, dueDate, selectedKabData, tableRows, subtotalDPP, ppn11, grandTotal, titikData.length);
+            await generatePDF(invNumber, issueDate, dueDate, selectedKabData, tableRows, subtotalDPP, ppn11, grandTotal, rawTitikData.length);
 
             fetchData();
 
