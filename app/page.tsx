@@ -377,6 +377,9 @@ export default function DashboardPage() {
           <button onClick={() => router.push('/invoices')} className={`flex-1 flex items-center justify-center gap-2 py-2 text-xs font-bold rounded-lg transition text-slate-600 hover:text-indigo-600 hover:bg-indigo-50`}>
             <FileText className="w-4 h-4" /> Penagihan Mitra
           </button>
+          <button onClick={() => router.push('/bast')} className={`flex-1 flex items-center justify-center gap-2 py-2 text-xs font-bold rounded-lg transition text-slate-600 hover:text-emerald-600 hover:bg-emerald-50 border border-transparent hover:border-emerald-100`}>
+            <CheckCircle2 className="w-4 h-4" /> BAST Lapangan
+          </button>
         </div>
 
         {activeTab === 'proyek' ? (
