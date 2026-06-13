@@ -401,6 +401,7 @@ export default function InvoicePage() {
         e.preventDefault();
         setIsProcessingPayment(true);
         try {
+            // 1. Catat ke tabel riwayat pembayaran (invoice_payments)
             const { error: paymentErr } = await supabase
                 .from('invoice_payments')
                 .insert({
@@ -412,6 +413,7 @@ export default function InvoicePage() {
 
             if (paymentErr) throw paymentErr;
 
+            // 2. Update status di tabel invoices
             const newStatus = paymentData.amount >= paymentData.total_amount ? 'Lunas' : 'Dibayar Sebagian';
             const { error: invUpdateErr } = await supabase
                 .from('invoices')
@@ -420,7 +422,50 @@ export default function InvoicePage() {
 
             if (invUpdateErr) throw invUpdateErr;
 
-            alert(`Pembayaran berhasil dicatat! Status diubah menjadi: ${newStatus}`);
+            // =================================================================
+            // 3. INTEGRASI JURNAL KAS (PRD KEU-01) - DOUBLE ENTRY BOOKKEEPING
+            // =================================================================
+
+            // A. Buat referensi unik untuk transaksi kas
+            const randHex = Math.floor(1000 + Math.random() * 9000);
+            const refCode = `KM-${paymentData.payment_date.replace(/-/g, '')}-${randHex}`;
+
+            // B. Masukkan ke tabel induk transaksi
+            const { data: txData, error: txError } = await supabase
+                .from('transactions')
+                .insert({
+                    date: paymentData.payment_date,
+                    description: `Pencairan Dana Invoice ${paymentData.invoice_number} via ${paymentData.payment_method}`,
+                    reference_code: refCode
+                })
+                .select().single();
+
+            if (txError) throw txError;
+
+            // C. Masukkan pencatatan debit/kredit ke jurnal
+            // Debit: Kas & Setara Kas (acc-kas-101) bertambah
+            // Kredit: Pendapatan Penjualan Layanan (acc-rev-401) bertambah
+            const { error: jeError } = await supabase
+                .from('journal_entries')
+                .insert([
+                    {
+                        transaction_id: txData.id,
+                        account_id: 'acc-kas-101',
+                        debit: paymentData.amount,
+                        credit: 0
+                    },
+                    {
+                        transaction_id: txData.id,
+                        account_id: 'acc-rev-401',
+                        debit: 0,
+                        credit: paymentData.amount
+                    }
+                ]);
+
+            if (jeError) throw jeError;
+            // =================================================================
+
+            alert(`Pembayaran berhasil dicatat! Status Invoice: ${newStatus} & Dana telah masuk ke Jurnal Kas (Ref: ${refCode}).`);
             setShowPaymentModal(false);
             fetchData();
 
@@ -540,9 +585,9 @@ export default function InvoicePage() {
                                                 <td className="px-4 py-4 font-bold text-right text-slate-900 whitespace-nowrap">{formatIDR(inv.total_amount)}</td>
                                                 <td className="px-4 py-4 text-center">
                                                     <span className={`px-2 py-1 rounded-md text-[10px] font-bold uppercase ${inv.status === 'Terkirim' ? 'bg-amber-50 text-amber-600 border border-amber-200' :
-                                                            inv.status === 'Lunas' ? 'bg-emerald-50 text-emerald-600 border border-emerald-200' :
-                                                                inv.status === 'Dibayar Sebagian' ? 'bg-blue-50 text-blue-600 border border-blue-200' :
-                                                                    'bg-slate-100 text-slate-600'
+                                                        inv.status === 'Lunas' ? 'bg-emerald-50 text-emerald-600 border border-emerald-200' :
+                                                            inv.status === 'Dibayar Sebagian' ? 'bg-blue-50 text-blue-600 border border-blue-200' :
+                                                                'bg-slate-100 text-slate-600'
                                                         }`}>
                                                         {inv.status}
                                                     </span>
