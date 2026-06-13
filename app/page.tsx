@@ -18,7 +18,8 @@ import {
   ChevronRight,
   Map,
   Clock,
-  User
+  User,
+  FileText
 } from 'lucide-react';
 
 interface TitikData {
@@ -245,6 +246,13 @@ export default function DashboardPage() {
           >
             <DollarSign className="w-4 h-4" />
             Jurnal Kas Keuangan
+          </button>
+          <button
+            onClick={() => router.push('/invoices')}
+            className={`flex-1 flex items-center justify-center gap-2 py-2 text-xs font-bold rounded-lg transition text-slate-600 hover:text-indigo-600 hover:bg-indigo-50 border border-transparent hover:border-indigo-100`}
+          >
+            <FileText className="w-4 h-4" />
+            Penagihan Mitra
           </button>
         </div>
 
