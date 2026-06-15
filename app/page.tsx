@@ -389,6 +389,9 @@ export default function DashboardPage() {
               <button onClick={() => router.push('/bast')} className={`flex-1 flex items-center justify-center gap-2 py-2 text-xs font-bold rounded-lg transition text-slate-600 hover:text-emerald-600 hover:bg-emerald-50 border border-transparent hover:border-emerald-100`}>
                 <CheckCircle2 className="w-4 h-4" /> BAST Lapangan
               </button>
+              <button onClick={() => router.push('/master-data')} className={`flex-1 flex items-center justify-center gap-2 py-2 text-xs font-bold rounded-lg transition text-slate-600 hover:text-amber-600 hover:bg-amber-50 border border-transparent hover:border-amber-100`}>
+                <Database className="w-4 h-4" /> Master Data
+              </button>
             </>
           )}
         </div>
