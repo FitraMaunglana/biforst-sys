@@ -49,8 +49,19 @@ export default function InvoicePage() {
     });
 
     useEffect(() => {
-        fetchData();
-    }, []);
+        const checkAuth = async () => {
+            const { data: { session } } = await supabase.auth.getSession();
+            if (!session) {
+                router.push('/login');
+            } else if (session.user.email !== 'biforsttechnologysolution@gmail.com') {
+                alert('AKSES DITOLAK: Halaman ini khusus untuk Direksi.');
+                router.push('/'); // Tendang kembali ke Dasbor
+            } else {
+                fetchData();
+            }
+        };
+        checkAuth();
+    }, [router]);
 
     const fetchData = async () => {
         setIsLoading(true);

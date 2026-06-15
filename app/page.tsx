@@ -8,7 +8,7 @@ import autoTable from 'jspdf-autotable';
 import {
   Layers, TrendingUp, MapPin, Users, Database, Lock, RefreshCcw, BarChart3,
   DollarSign, Briefcase, CheckCircle2, Map, Clock, User, FileText, ArrowUpRight,
-  ArrowDownLeft, Wallet, Download, Eye, X
+  ArrowDownLeft, Wallet, Download, Eye, X, ShieldAlert
 } from 'lucide-react';
 
 interface TitikData {
@@ -34,21 +34,48 @@ interface TitikData {
 
 const PIPELINE_STATUSES = ['Belum Mulai', 'Pitching', 'Coverage', 'Dealing', 'Kontrak', 'Sudah Aman'];
 
+// EMAIL ADMIN MASTER
+const ADMIN_EMAIL = 'biforsttechnologysolution@gmail.com';
+
 export default function DashboardPage() {
   const router = useRouter();
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<'proyek' | 'kas'>('proyek');
+  const [userRole, setUserRole] = useState<'admin' | 'staff'>('staff');
+  const [currentUser, setCurrentUser] = useState('');
 
-  // State Data Proyek
   const [titikList, setTitikList] = useState<TitikData[]>([]);
   const [selectedKabupaten, setSelectedKabupaten] = useState<string | null>(null);
   const [isUpdatingStatusId, setIsUpdatingStatusId] = useState<string | null>(null);
 
-  // State Data Jurnal Kas & Pratinjau PDF
   const [transactions, setTransactions] = useState<any[]>([]);
   const [kasBalance, setKasBalance] = useState({ masuk: 0, keluar: 0, saldo: 0 });
   const [previewReportPdf, setPreviewReportPdf] = useState<{ url: string; doc: any; fileName: string } | null>(null);
+
+  useEffect(() => {
+    const initDashboard = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        router.push('/login');
+      } else {
+        const email = session.user.email || '';
+        setCurrentUser(email);
+
+        // LOGIKA ROLE-BASED ACCESS CONTROL (RBAC)
+        if (email === ADMIN_EMAIL) {
+          setUserRole('admin');
+        } else {
+          setUserRole('staff');
+          setActiveTab('proyek'); // Pastikan staf selalu di tab proyek
+        }
+
+        setIsCheckingAuth(false);
+        await fetchDashboardData();
+      }
+    };
+    initDashboard();
+  }, [router]);
 
   const fetchDashboardData = async () => {
     setIsLoading(true);
@@ -126,27 +153,10 @@ export default function DashboardPage() {
     }
   };
 
-  useEffect(() => {
-    const initDashboard = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) {
-        router.push('/login');
-      } else {
-        setIsCheckingAuth(false);
-        await fetchDashboardData();
-      }
-    };
-    initDashboard();
-  }, [router]);
-
   const handleStatusChange = async (titikId: string, newStatus: string) => {
     setIsUpdatingStatusId(titikId);
     try {
-      const { error } = await supabase
-        .from('titik_lokasi')
-        .update({ status: newStatus })
-        .eq('id', titikId);
-
+      const { error } = await supabase.from('titik_lokasi').update({ status: newStatus }).eq('id', titikId);
       if (error) throw error;
       setTitikList(prev => prev.map(item => item.id === titikId ? { ...item, status: newStatus } : item));
     } catch (err) {
@@ -162,9 +172,6 @@ export default function DashboardPage() {
     return `${d.getDate()} ${months[d.getMonth()]} ${d.getFullYear()}`;
   };
 
-  // =========================================================================
-  // FUNGSI GENERATOR PDF LAPORAN KAS (PRATINJAU DULU)
-  // =========================================================================
   const handlePreviewReport = async () => {
     setIsLoading(true);
     try {
@@ -183,7 +190,6 @@ export default function DashboardPage() {
       const stempelImg = await loadImage('/stempel_scan.png');
       const ttdImg = await loadImage('/tanda_tangan.jpg');
 
-      // --- HEADER LAPORAN ---
       doc.setFontSize(22);
       doc.setFont("helvetica", "bold");
       doc.setTextColor(...primaryColor);
@@ -203,7 +209,6 @@ export default function DashboardPage() {
       doc.setLineWidth(0.8);
       doc.line(14, 40, 196, 40);
 
-      // --- KOTAK RINGKASAN SALDO ---
       doc.setFillColor(245, 247, 250);
       doc.rect(14, 46, 182, 26, 'F');
 
@@ -230,7 +235,6 @@ export default function DashboardPage() {
       doc.setTextColor(...primaryColor);
       doc.text(`Rp ${kasBalance.saldo.toLocaleString('id-ID')}`, 120, 65);
 
-      // --- TABEL MUTASI ---
       const tableRows = transactions.map((tx, i) => [
         i + 1,
         formatDateIndo(tx.date),
@@ -254,7 +258,6 @@ export default function DashboardPage() {
         }
       });
 
-      // --- FOOTER & TANDA TANGAN ---
       const finalY = (doc as any).lastAutoTable.finalY + 15;
 
       doc.setFont("helvetica", "normal");
@@ -274,7 +277,6 @@ export default function DashboardPage() {
 
       if (stempelImg) doc.addImage(stempelImg, 'PNG', 146, finalY - 4, 42, 42);
 
-      // --- BUAT PRATINJAU ---
       const pdfBlob = doc.output('blob');
       const pdfUrl = URL.createObjectURL(pdfBlob);
       const fileId = `Laporan_Kas_BTS_${new Date().toISOString().split('T')[0]}.pdf`;
@@ -302,7 +304,6 @@ export default function DashboardPage() {
     );
   }
 
-  // --- Kalkulasi Metrik Proyek ---
   const totalTitik = titikList.length;
   const statusCounts = titikList.reduce((acc: Record<string, number>, item) => {
     acc[item.status] = (acc[item.status] || 0) + 1;
@@ -345,9 +346,13 @@ export default function DashboardPage() {
             <div>
               <div className="flex items-center gap-2">
                 <h1 className="font-bold tracking-tight text-lg text-white">biforst-erp</h1>
-                <span className="bg-indigo-500/15 text-indigo-400 text-[10px] px-2 py-0.5 rounded border border-indigo-500/30 font-mono font-medium">Enterprise Core</span>
+                {userRole === 'admin' ? (
+                  <span className="bg-indigo-500/15 text-indigo-400 text-[10px] px-2 py-0.5 rounded border border-indigo-500/30 font-mono font-medium">Manager Akses</span>
+                ) : (
+                  <span className="bg-emerald-500/15 text-emerald-400 text-[10px] px-2 py-0.5 rounded border border-emerald-500/30 font-mono font-medium">Staf Lapangan</span>
+                )}
               </div>
-              <p className="text-slate-400 text-xs font-mono">PT Bifrost Technology Solution</p>
+              <p className="text-slate-400 text-xs font-mono">{currentUser}</p>
             </div>
           </div>
 
@@ -367,19 +372,25 @@ export default function DashboardPage() {
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
 
-        <div className="flex bg-slate-200/60 p-1.5 rounded-xl max-w-2xl border border-slate-200">
+        {/* LOGIKA PENYEMBUNYIAN TAB NAVIGASI */}
+        <div className="flex bg-slate-200/60 p-1.5 rounded-xl max-w-3xl border border-slate-200">
           <button onClick={() => setActiveTab('proyek')} className={`flex-1 flex items-center justify-center gap-2 py-2 text-xs font-bold rounded-lg transition ${activeTab === 'proyek' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600 hover:text-slate-900'}`}>
             <Briefcase className="w-4 h-4" /> Komando Proyek
           </button>
-          <button onClick={() => setActiveTab('kas')} className={`flex-1 flex items-center justify-center gap-2 py-2 text-xs font-bold rounded-lg transition ${activeTab === 'kas' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600 hover:text-slate-900'}`}>
-            <DollarSign className="w-4 h-4" /> Jurnal Kas Keuangan
-          </button>
-          <button onClick={() => router.push('/invoices')} className={`flex-1 flex items-center justify-center gap-2 py-2 text-xs font-bold rounded-lg transition text-slate-600 hover:text-indigo-600 hover:bg-indigo-50`}>
-            <FileText className="w-4 h-4" /> Penagihan Mitra
-          </button>
-          <button onClick={() => router.push('/bast')} className={`flex-1 flex items-center justify-center gap-2 py-2 text-xs font-bold rounded-lg transition text-slate-600 hover:text-emerald-600 hover:bg-emerald-50 border border-transparent hover:border-emerald-100`}>
-            <CheckCircle2 className="w-4 h-4" /> BAST Lapangan
-          </button>
+
+          {userRole === 'admin' && (
+            <>
+              <button onClick={() => setActiveTab('kas')} className={`flex-1 flex items-center justify-center gap-2 py-2 text-xs font-bold rounded-lg transition ${activeTab === 'kas' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600 hover:text-slate-900'}`}>
+                <DollarSign className="w-4 h-4" /> Jurnal Kas Keuangan
+              </button>
+              <button onClick={() => router.push('/invoices')} className={`flex-1 flex items-center justify-center gap-2 py-2 text-xs font-bold rounded-lg transition text-slate-600 hover:text-indigo-600 hover:bg-indigo-50 border border-transparent hover:border-indigo-100`}>
+                <FileText className="w-4 h-4" /> Penagihan Mitra
+              </button>
+              <button onClick={() => router.push('/bast')} className={`flex-1 flex items-center justify-center gap-2 py-2 text-xs font-bold rounded-lg transition text-slate-600 hover:text-emerald-600 hover:bg-emerald-50 border border-transparent hover:border-emerald-100`}>
+                <CheckCircle2 className="w-4 h-4" /> BAST Lapangan
+              </button>
+            </>
+          )}
         </div>
 
         {activeTab === 'proyek' ? (
@@ -391,11 +402,23 @@ export default function DashboardPage() {
                 <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Total Ekspansi Titik</p>
                 <h3 className="text-2xl font-black mt-1 text-slate-900">{totalTitik} <span className="text-xs text-slate-400 font-normal">Lokasi</span></h3>
               </div>
-              <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm relative overflow-hidden">
-                <div className="absolute right-4 top-4 p-2 bg-emerald-50 text-emerald-600 rounded-xl"><TrendingUp className="w-5 h-5" /></div>
-                <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Proyeksi Profit 1 Thn</p>
-                <h3 className="text-2xl font-black mt-1 text-emerald-600">{formatIDR(totalProyeksiProfit1Tahun)}</h3>
-              </div>
+
+              {/* Sembunyikan Proyeksi Profit untuk Staf Lapangan */}
+              {userRole === 'admin' ? (
+                <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm relative overflow-hidden">
+                  <div className="absolute right-4 top-4 p-2 bg-emerald-50 text-emerald-600 rounded-xl"><TrendingUp className="w-5 h-5" /></div>
+                  <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Proyeksi Profit 1 Thn</p>
+                  <h3 className="text-2xl font-black mt-1 text-emerald-600">{formatIDR(totalProyeksiProfit1Tahun)}</h3>
+                </div>
+              ) : (
+                <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm relative overflow-hidden flex items-center justify-center text-slate-400">
+                  <div className="text-center space-y-1">
+                    <ShieldAlert className="w-6 h-6 mx-auto opacity-50" />
+                    <p className="text-[10px] font-mono">Dibatasi Manajemen</p>
+                  </div>
+                </div>
+              )}
+
               <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm relative overflow-hidden">
                 <div className="absolute right-4 top-4 p-2 bg-amber-50 text-amber-600 rounded-xl"><CheckCircle2 className="w-5 h-5" /></div>
                 <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Tahap Dealing</p>
@@ -475,9 +498,8 @@ export default function DashboardPage() {
             </div>
           </>
         ) : (
-          /* TAB 2: JURNAL KAS KEUANGAN */
+          /* TAB 2: JURNAL KAS KEUANGAN (HANYA BISA DIAKSES ADMIN) */
           <div className="space-y-6">
-
             <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
               <div className="bg-emerald-500 rounded-2xl p-6 text-white shadow-lg shadow-emerald-500/20 relative overflow-hidden">
                 <ArrowDownLeft className="w-24 h-24 absolute -right-4 -bottom-4 opacity-10" />
@@ -497,37 +519,22 @@ export default function DashboardPage() {
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-
               <div className="lg:col-span-7 bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
                 <div className="p-5 border-b border-slate-100 flex flex-wrap items-center justify-between gap-3">
                   <h3 className="font-bold text-slate-900 text-sm flex items-center gap-2">
                     <Database className="w-4 h-4 text-indigo-600" /> Buku Mutasi Kas Induk
                   </h3>
-
-                  {/* TOMBOL EKSPOR LAPORAN BARU (PRD KEU-03) */}
                   <div className="flex items-center gap-2">
-                    <button
-                      onClick={handlePreviewReport}
-                      disabled={isLoading}
-                      className="px-3 py-1.5 bg-indigo-50 text-indigo-700 hover:bg-indigo-600 hover:text-white border border-indigo-200 font-bold text-[11px] rounded-lg transition flex items-center gap-1.5"
-                    >
-                      {isLoading ? <RefreshCcw className="w-3 h-3 animate-spin" /> : <Eye className="w-3 h-3" />}
-                      Pratinjau Laporan PDF
+                    <button onClick={handlePreviewReport} disabled={isLoading} className="px-3 py-1.5 bg-indigo-50 text-indigo-700 hover:bg-indigo-600 hover:text-white border border-indigo-200 font-bold text-[11px] rounded-lg transition flex items-center gap-1.5">
+                      {isLoading ? <RefreshCcw className="w-3 h-3 animate-spin" /> : <Eye className="w-3 h-3" />} Pratinjau Laporan PDF
                     </button>
-                    <button onClick={fetchKasData} className="text-slate-400 hover:text-indigo-600 p-1.5 bg-slate-50 border border-slate-200 rounded-lg">
-                      <RefreshCcw className="w-3.5 h-3.5" />
-                    </button>
+                    <button onClick={fetchKasData} className="text-slate-400 hover:text-indigo-600 p-1.5 bg-slate-50 border border-slate-200 rounded-lg"><RefreshCcw className="w-3.5 h-3.5" /></button>
                   </div>
                 </div>
-
                 <div className="overflow-x-auto max-h-[500px] overflow-y-auto">
                   <table className="w-full text-left text-xs">
                     <thead className="bg-slate-50 text-slate-500 font-bold uppercase tracking-wider sticky top-0">
-                      <tr>
-                        <th className="px-4 py-3">Tanggal & Ref</th>
-                        <th className="px-4 py-3">Keterangan Transaksi</th>
-                        <th className="px-4 py-3 text-right">Nominal (Rp)</th>
-                      </tr>
+                      <tr><th className="px-4 py-3">Tanggal & Ref</th><th className="px-4 py-3">Keterangan Transaksi</th><th className="px-4 py-3 text-right">Nominal (Rp)</th></tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
                       {transactions.length === 0 ? (
@@ -536,20 +543,11 @@ export default function DashboardPage() {
                         transactions.map(tx => (
                           <tr key={tx.id} className="hover:bg-slate-50 transition group">
                             <td className="px-4 py-3 align-top whitespace-nowrap">
-                              <div className="font-semibold text-slate-800 flex items-center gap-1.5">
-                                {tx.type === 'Masuk' ? <ArrowDownLeft className="w-3 h-3 text-emerald-500" /> : <ArrowUpRight className="w-3 h-3 text-rose-500" />}
-                                {formatDateIndo(tx.date)}
-                              </div>
+                              <div className="font-semibold text-slate-800 flex items-center gap-1.5">{tx.type === 'Masuk' ? <ArrowDownLeft className="w-3 h-3 text-emerald-500" /> : <ArrowUpRight className="w-3 h-3 text-rose-500" />}{formatDateIndo(tx.date)}</div>
                               <div className="text-[10px] text-slate-400 font-mono mt-0.5">{tx.reference_code}</div>
                             </td>
-                            <td className="px-4 py-3 align-top text-slate-600 leading-relaxed max-w-[200px]">
-                              {tx.description}
-                            </td>
-                            <td className="px-4 py-3 align-top text-right">
-                              <span className={`font-bold font-mono px-2.5 py-1 rounded bg-slate-50 border ${tx.type === 'Masuk' ? 'text-emerald-600 border-emerald-100' : 'text-rose-600 border-rose-100'}`}>
-                                {tx.type === 'Masuk' ? '+' : '-'} {formatIDR(tx.amount)}
-                              </span>
-                            </td>
+                            <td className="px-4 py-3 align-top text-slate-600 leading-relaxed max-w-[200px]">{tx.description}</td>
+                            <td className="px-4 py-3 align-top text-right"><span className={`font-bold font-mono px-2.5 py-1 rounded bg-slate-50 border ${tx.type === 'Masuk' ? 'text-emerald-600 border-emerald-100' : 'text-rose-600 border-rose-100'}`}>{tx.type === 'Masuk' ? '+' : '-'} {formatIDR(tx.amount)}</span></td>
                           </tr>
                         ))
                       )}
@@ -557,11 +555,7 @@ export default function DashboardPage() {
                   </table>
                 </div>
               </div>
-
-              <div className="lg:col-span-5 relative">
-                <TransactionForm onSuccess={() => fetchKasData()} />
-              </div>
-
+              <div className="lg:col-span-5 relative"><TransactionForm onSuccess={() => fetchKasData()} /></div>
             </div>
           </div>
         )}
@@ -572,28 +566,13 @@ export default function DashboardPage() {
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-4xl h-[90vh] flex flex-col overflow-hidden">
             <div className="bg-slate-900 p-4 flex items-center justify-between text-white shrink-0">
-              <h3 className="font-bold flex items-center gap-2">
-                <FileText className="w-5 h-5 text-indigo-400" /> Pratinjau Laporan Mutasi Kas & Keuangan
-              </h3>
+              <h3 className="font-bold flex items-center gap-2"><FileText className="w-5 h-5 text-indigo-400" /> Pratinjau Laporan Mutasi Kas & Keuangan</h3>
               <div className="flex items-center gap-4">
-                <button
-                  onClick={() => previewReportPdf.doc.save(previewReportPdf.fileName)}
-                  className="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold rounded-lg flex items-center gap-2 transition"
-                >
-                  <Download className="w-4 h-4" /> Simpan & Unduh Laporan
-                </button>
-                <button onClick={() => setPreviewReportPdf(null)} className="text-slate-400 hover:text-white transition" title="Tutup Preview">
-                  <X className="w-6 h-6" />
-                </button>
+                <button onClick={() => previewReportPdf.doc.save(previewReportPdf.fileName)} className="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold rounded-lg flex items-center gap-2 transition"><Download className="w-4 h-4" /> Simpan & Unduh Laporan</button>
+                <button onClick={() => setPreviewReportPdf(null)} className="text-slate-400 hover:text-white transition"><X className="w-6 h-6" /></button>
               </div>
             </div>
-            <div className="flex-1 bg-slate-200 relative">
-              <iframe
-                src={previewReportPdf.url}
-                className="w-full h-full border-none absolute inset-0"
-                title="Report Preview"
-              />
-            </div>
+            <div className="flex-1 bg-slate-200 relative"><iframe src={previewReportPdf.url} className="w-full h-full border-none absolute inset-0" title="Report Preview" /></div>
           </div>
         </div>
       )}
