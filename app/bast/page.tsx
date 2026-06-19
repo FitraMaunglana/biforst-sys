@@ -2,10 +2,11 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '../../src/lib/supabaseClient';
+import Sidebar from '../../src/components/Sidebar';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import {
-    FileCheck, Download, Plus, ArrowLeft, Building2, CheckCircle2, Eye, X, MapPin
+    FileCheck, Download, Plus, Building2, CheckCircle2, Eye, X, MapPin
 } from 'lucide-react';
 
 export default function BastPage() {
@@ -242,105 +243,105 @@ export default function BastPage() {
     };
 
     return (
-        <div className="min-h-screen bg-slate-50 text-slate-800 font-sans p-6 relative">
-            <div className="max-w-6xl mx-auto space-y-6">
+        <div className="min-h-screen bg-slate-50 text-slate-800 font-sans flex">
+            <Sidebar />
+            <div className="flex-1 min-w-0 p-6 relative">
+                <div className="max-w-6xl mx-auto space-y-6">
 
-                <div className="flex items-center justify-between bg-slate-900 p-6 rounded-2xl text-white shadow-lg">
-                    <div className="flex items-center gap-4">
-                        <button onClick={() => router.push('/')} className="p-2 bg-slate-800 hover:bg-slate-700 rounded-lg transition">
-                            <ArrowLeft className="w-5 h-5" />
-                        </button>
-                        <div>
-                            <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
-                                <FileCheck className="w-6 h-6 text-emerald-400" /> Modul Berita Acara (BAST)
-                            </h1>
-                            <p className="text-slate-400 text-sm mt-1">Fase 3: Pembuatan Dokumen Serah Terima Proyek Lapangan</p>
+                    <div className="flex items-center justify-between bg-slate-900 p-6 rounded-2xl text-white shadow-lg">
+                        <div className="flex items-center gap-4">
+                            <div>
+                                <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
+                                    <FileCheck className="w-6 h-6 text-emerald-400" /> Modul Berita Acara (BAST)
+                                </h1>
+                                <p className="text-slate-400 text-sm mt-1">Fase 3: Pembuatan Dokumen Serah Terima Proyek Lapangan</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                        <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-5">
+                            <h2 className="font-bold text-slate-900 text-sm flex items-center gap-2 border-b border-slate-100 pb-3">
+                                <Plus className="w-4 h-4 text-emerald-600" /> Terbitkan Dokumen BAST Baru
+                            </h2>
+                            <form onSubmit={handleCreateBast} className="space-y-4">
+                                <div>
+                                    <label className="block text-xs font-bold text-slate-600 mb-1">Pilih Kabupaten Proyek</label>
+                                    <select
+                                        value={selectedKab}
+                                        onChange={(e) => setSelectedKab(e.target.value)}
+                                        className="w-full text-sm px-3 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none"
+                                        required
+                                    >
+                                        <option value="">-- Pilih Wilayah --</option>
+                                        {kabupatens.map(k => (
+                                            <option key={k.id} value={k.id}>{k.name}</option>
+                                        ))}
+                                    </select>
+                                </div>
+
+                                <div>
+                                    <label className="block text-xs font-bold text-slate-600 mb-1">Tanggal Serah Terima</label>
+                                    <input
+                                        type="date"
+                                        value={handoverDate}
+                                        onChange={(e) => setHandoverDate(e.target.value)}
+                                        className="w-full text-sm px-3 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none"
+                                        required
+                                    />
+                                </div>
+
+                                <div className="pt-2">
+                                    <button
+                                        type="submit"
+                                        disabled={isGenerating}
+                                        className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-400 text-white font-bold rounded-xl text-sm transition flex items-center justify-center gap-2 shadow-md"
+                                    >
+                                        {isGenerating ? 'Menyiapkan BAST...' : 'Kalkulasi & Pratinjau BAST'}
+                                        {!isGenerating && <Eye className="w-4 h-4" />}
+                                    </button>
+                                </div>
+                            </form>
+
+                            <div className="bg-rose-50 p-4 rounded-xl border border-rose-100 text-xs text-rose-700 leading-relaxed flex items-start gap-2">
+                                <MapPin className="w-4 h-4 shrink-0 mt-0.5" />
+                                <p><strong>PENTING:</strong> Sistem mengunci keamanan operasional. BAST hanya dapat diterbitkan untuk titik yang statusnya sudah dirubah menjadi <strong>"Sudah Aman"</strong> oleh tim lapangan di Dasbor Utama. Titik yang masih "Kontrak" atau "Dealing" tidak akan masuk ke dokumen BAST.</p>
+                            </div>
                         </div>
                     </div>
                 </div>
 
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                    <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-5">
-                        <h2 className="font-bold text-slate-900 text-sm flex items-center gap-2 border-b border-slate-100 pb-3">
-                            <Plus className="w-4 h-4 text-emerald-600" /> Terbitkan Dokumen BAST Baru
-                        </h2>
-                        <form onSubmit={handleCreateBast} className="space-y-4">
-                            <div>
-                                <label className="block text-xs font-bold text-slate-600 mb-1">Pilih Kabupaten Proyek</label>
-                                <select
-                                    value={selectedKab}
-                                    onChange={(e) => setSelectedKab(e.target.value)}
-                                    className="w-full text-sm px-3 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none"
-                                    required
-                                >
-                                    <option value="">-- Pilih Wilayah --</option>
-                                    {kabupatens.map(k => (
-                                        <option key={k.id} value={k.id}>{k.name}</option>
-                                    ))}
-                                </select>
+                {/* MODAL PRATINJAU PDF */}
+                {previewPdf && (
+                    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
+                        <div className="bg-white rounded-2xl shadow-xl w-full max-w-4xl h-[90vh] flex flex-col overflow-hidden">
+                            <div className="bg-slate-900 p-4 flex items-center justify-between text-white shrink-0">
+                                <h3 className="font-bold flex items-center gap-2">
+                                    <FileCheck className="w-5 h-5 text-emerald-400" /> Pratinjau BAST
+                                </h3>
+                                <div className="flex items-center gap-4">
+                                    <button
+                                        onClick={() => previewPdf.doc.save(previewPdf.fileName)}
+                                        className="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold rounded-lg flex items-center gap-2 transition"
+                                    >
+                                        <Download className="w-4 h-4" /> Simpan & Unduh Dokumen
+                                    </button>
+                                    <button onClick={() => setPreviewPdf(null)} className="text-slate-400 hover:text-white transition" title="Tutup Preview">
+                                        <X className="w-6 h-6" />
+                                    </button>
+                                </div>
                             </div>
-
-                            <div>
-                                <label className="block text-xs font-bold text-slate-600 mb-1">Tanggal Serah Terima</label>
-                                <input
-                                    type="date"
-                                    value={handoverDate}
-                                    onChange={(e) => setHandoverDate(e.target.value)}
-                                    className="w-full text-sm px-3 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none"
-                                    required
+                            <div className="flex-1 bg-slate-200 relative">
+                                <iframe
+                                    src={previewPdf.url}
+                                    className="w-full h-full border-none absolute inset-0"
+                                    title="BAST Preview"
                                 />
                             </div>
-
-                            <div className="pt-2">
-                                <button
-                                    type="submit"
-                                    disabled={isGenerating}
-                                    className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-400 text-white font-bold rounded-xl text-sm transition flex items-center justify-center gap-2 shadow-md"
-                                >
-                                    {isGenerating ? 'Menyiapkan BAST...' : 'Kalkulasi & Pratinjau BAST'}
-                                    {!isGenerating && <Eye className="w-4 h-4" />}
-                                </button>
-                            </div>
-                        </form>
-
-                        <div className="bg-rose-50 p-4 rounded-xl border border-rose-100 text-xs text-rose-700 leading-relaxed flex items-start gap-2">
-                            <MapPin className="w-4 h-4 shrink-0 mt-0.5" />
-                            <p><strong>PENTING:</strong> Sistem mengunci keamanan operasional. BAST hanya dapat diterbitkan untuk titik yang statusnya sudah dirubah menjadi <strong>"Sudah Aman"</strong> oleh tim lapangan di Dasbor Utama. Titik yang masih "Kontrak" atau "Dealing" tidak akan masuk ke dokumen BAST.</p>
                         </div>
                     </div>
-                </div>
+                )}
             </div>
-
-            {/* MODAL PRATINJAU PDF */}
-            {previewPdf && (
-                <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
-                    <div className="bg-white rounded-2xl shadow-xl w-full max-w-4xl h-[90vh] flex flex-col overflow-hidden">
-                        <div className="bg-slate-900 p-4 flex items-center justify-between text-white shrink-0">
-                            <h3 className="font-bold flex items-center gap-2">
-                                <FileCheck className="w-5 h-5 text-emerald-400" /> Pratinjau BAST
-                            </h3>
-                            <div className="flex items-center gap-4">
-                                <button
-                                    onClick={() => previewPdf.doc.save(previewPdf.fileName)}
-                                    className="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold rounded-lg flex items-center gap-2 transition"
-                                >
-                                    <Download className="w-4 h-4" /> Simpan & Unduh Dokumen
-                                </button>
-                                <button onClick={() => setPreviewPdf(null)} className="text-slate-400 hover:text-white transition" title="Tutup Preview">
-                                    <X className="w-6 h-6" />
-                                </button>
-                            </div>
-                        </div>
-                        <div className="flex-1 bg-slate-200 relative">
-                            <iframe
-                                src={previewPdf.url}
-                                className="w-full h-full border-none absolute inset-0"
-                                title="BAST Preview"
-                            />
-                        </div>
-                    </div>
-                </div>
-            )}
         </div>
     );
 }

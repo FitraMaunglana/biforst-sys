@@ -2,10 +2,11 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '../../src/lib/supabaseClient';
+import Sidebar from '../../src/components/Sidebar';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import {
-    FileText, Download, Plus, ArrowLeft, Building2, Clock, CheckCircle2, X, Eye
+    FileText, Download, Plus, Building2, Clock, CheckCircle2, X, Eye
 } from 'lucide-react';
 
 const terbilang = (angka: number): string => {
@@ -440,241 +441,241 @@ export default function InvoicePage() {
     };
 
     return (
-        <div className="min-h-screen bg-slate-50 text-slate-800 font-sans p-6 relative">
-            <div className="max-w-6xl mx-auto space-y-6">
+        <div className="min-h-screen bg-slate-50 text-slate-800 font-sans flex">
+            <Sidebar />
+            <div className="flex-1 min-w-0 p-6 relative">
+                <div className="max-w-6xl mx-auto space-y-6">
 
-                <div className="flex items-center justify-between bg-slate-900 p-6 rounded-2xl text-white shadow-lg">
-                    <div className="flex items-center gap-4">
-                        <button onClick={() => router.push('/')} className="p-2 bg-slate-800 hover:bg-slate-700 rounded-lg transition">
-                            <ArrowLeft className="w-5 h-5" />
-                        </button>
-                        <div>
-                            <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
-                                <FileText className="w-6 h-6 text-indigo-400" /> Modul Penagihan & Invoice
-                            </h1>
-                            <p className="text-slate-400 text-sm mt-1">Fase 2: Pembuatan tagihan otomatis bersertifikasi elektronik (S.Tr.T.)</p>
+                    <div className="flex items-center justify-between bg-slate-900 p-6 rounded-2xl text-white shadow-lg">
+                        <div className="flex items-center gap-4">
+                            <div>
+                                <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
+                                    <FileText className="w-6 h-6 text-indigo-400" /> Modul Penagihan & Invoice
+                                </h1>
+                                <p className="text-slate-400 text-sm mt-1">Fase 2: Pembuatan tagihan otomatis bersertifikasi elektronik (S.Tr.T.)</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                        <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-5">
+                            <h2 className="font-bold text-slate-900 text-sm flex items-center gap-2 border-b border-slate-100 pb-3">
+                                <Plus className="w-4 h-4 text-emerald-600" /> Terbitkan Invoice Baru
+                            </h2>
+                            <form onSubmit={handleCreateInvoice} className="space-y-4">
+                                <div>
+                                    <label className="block text-xs font-bold text-slate-600 mb-1">Pilih Kabupaten</label>
+                                    <select
+                                        value={selectedKab}
+                                        onChange={(e) => setSelectedKab(e.target.value)}
+                                        className="w-full text-sm px-3 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none"
+                                        required
+                                    >
+                                        <option value="">-- Pilih Wilayah --</option>
+                                        {kabupatens.map(k => (
+                                            <option key={k.id} value={k.id}>{k.name}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-bold text-slate-600 mb-1">Jenis Penagihan</label>
+                                    <select
+                                        value={billingType}
+                                        onChange={(e) => setBillingType(e.target.value)}
+                                        className="w-full text-sm px-3 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none"
+                                    >
+                                        <option value="Gabungan (CST + MRC)">Gabungan (CST + MRC)</option>
+                                        <option value="Hanya CST (Sekali Bayar)">Hanya CST (Sekali Bayar)</option>
+                                        <option value="Hanya MRC (Bulanan)">Hanya MRC (Bulanan)</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-bold text-slate-600 mb-1">Jatuh Tempo</label>
+                                    <input
+                                        type="date"
+                                        value={dueDate}
+                                        onChange={(e) => setDueDate(e.target.value)}
+                                        className="w-full text-sm px-3 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none"
+                                        required
+                                    />
+                                </div>
+                                <div className="pt-2">
+                                    <button
+                                        type="submit"
+                                        disabled={isGenerating}
+                                        className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-400 text-white font-bold rounded-xl text-sm transition flex items-center justify-center gap-2 shadow-md"
+                                    >
+                                        {isGenerating ? 'Menyiapkan PDF...' : 'Kalkulasi & Pratinjau PDF'}
+                                        {!isGenerating && <Eye className="w-4 h-4" />}
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+
+                        <div className="lg:col-span-2 bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4">
+                            <h2 className="font-bold text-slate-900 text-sm flex items-center gap-2 border-b border-slate-100 pb-3">
+                                <Building2 className="w-4 h-4 text-indigo-600" /> Riwayat Tagihan ke PT Comtelindo
+                            </h2>
+
+                            {isLoading ? (
+                                <p className="text-sm text-slate-500 text-center py-10 animate-pulse">Memuat data brankas...</p>
+                            ) : invoices.length === 0 ? (
+                                <div className="text-center py-12 border-2 border-dashed border-slate-200 rounded-xl bg-slate-50">
+                                    <p className="text-sm text-slate-400 font-medium">Belum ada invoice yang diterbitkan.</p>
+                                </div>
+                            ) : (
+                                <div className="overflow-x-auto">
+                                    <table className="w-full text-left text-xs">
+                                        <thead className="text-slate-400 bg-slate-50 font-bold uppercase tracking-wider">
+                                            <tr>
+                                                <th className="px-4 py-3 rounded-l-lg">Nomor Invoice</th>
+                                                <th className="px-4 py-3">Jatuh Tempo</th>
+                                                <th className="px-4 py-3 text-right">Total Nilai</th>
+                                                <th className="px-4 py-3 text-center">Status</th>
+                                                <th className="px-4 py-3 text-center rounded-r-lg">Aksi</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-slate-100">
+                                            {invoices.map((inv) => (
+                                                <tr key={inv.id} className="hover:bg-slate-50 transition">
+                                                    <td className="px-4 py-4 font-mono font-bold text-indigo-600">
+                                                        {inv.invoice_number}
+                                                        <div className="text-[10px] text-slate-400 font-sans mt-0.5">{inv.kabupatens?.name}</div>
+                                                    </td>
+                                                    <td className="px-4 py-4 text-slate-500 whitespace-nowrap flex items-center gap-1">
+                                                        <Clock className="w-3 h-3" /> {formatDateIndo(inv.due_date)}
+                                                    </td>
+                                                    <td className="px-4 py-4 font-bold text-right text-slate-900 whitespace-nowrap">{formatIDR(inv.total_amount)}</td>
+                                                    <td className="px-4 py-4 text-center">
+                                                        <span className={`px-2 py-1 rounded-md text-[10px] font-bold uppercase ${inv.status === 'Terkirim' ? 'bg-amber-50 text-amber-600 border border-amber-200' :
+                                                            inv.status === 'Lunas' ? 'bg-emerald-50 text-emerald-600 border border-emerald-200' :
+                                                                inv.status === 'Dibayar Sebagian' ? 'bg-blue-50 text-blue-600 border border-blue-200' :
+                                                                    'bg-slate-100 text-slate-600'
+                                                            }`}>
+                                                            {inv.status}
+                                                        </span>
+                                                    </td>
+                                                    <td className="px-4 py-4 text-center">
+                                                        {inv.status === 'Terkirim' || inv.status === 'Dibayar Sebagian' ? (
+                                                            <button
+                                                                onClick={() => openPaymentModal(inv)}
+                                                                className="text-[10px] bg-indigo-50 text-indigo-700 font-bold px-2 py-1.5 rounded border border-indigo-200 hover:bg-indigo-600 hover:text-white transition whitespace-nowrap"
+                                                            >
+                                                                Terima Dana
+                                                            </button>
+                                                        ) : (
+                                                            <span className="text-[10px] text-slate-400 italic">Selesai</span>
+                                                        )}
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            )}
                         </div>
                     </div>
                 </div>
 
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                    <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-5">
-                        <h2 className="font-bold text-slate-900 text-sm flex items-center gap-2 border-b border-slate-100 pb-3">
-                            <Plus className="w-4 h-4 text-emerald-600" /> Terbitkan Invoice Baru
-                        </h2>
-                        <form onSubmit={handleCreateInvoice} className="space-y-4">
-                            <div>
-                                <label className="block text-xs font-bold text-slate-600 mb-1">Pilih Kabupaten</label>
-                                <select
-                                    value={selectedKab}
-                                    onChange={(e) => setSelectedKab(e.target.value)}
-                                    className="w-full text-sm px-3 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none"
-                                    required
-                                >
-                                    <option value="">-- Pilih Wilayah --</option>
-                                    {kabupatens.map(k => (
-                                        <option key={k.id} value={k.id}>{k.name}</option>
-                                    ))}
-                                </select>
+                {/* MODAL PRATINJAU PDF (PREVIEW) */}
+                {previewPdf && (
+                    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
+                        <div className="bg-white rounded-2xl shadow-xl w-full max-w-4xl h-[90vh] flex flex-col overflow-hidden">
+                            <div className="bg-slate-900 p-4 flex items-center justify-between text-white shrink-0">
+                                <h3 className="font-bold flex items-center gap-2">
+                                    <FileText className="w-5 h-5 text-indigo-400" /> Pratinjau Invoice Resmi
+                                </h3>
+                                <div className="flex items-center gap-4">
+                                    <button
+                                        onClick={() => previewPdf.doc.save(previewPdf.fileName)}
+                                        className="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold rounded-lg flex items-center gap-2 transition"
+                                    >
+                                        <Download className="w-4 h-4" /> Simpan & Unduh PDF
+                                    </button>
+                                    <button onClick={() => setPreviewPdf(null)} className="text-slate-400 hover:text-white transition" title="Tutup Preview">
+                                        <X className="w-6 h-6" />
+                                    </button>
+                                </div>
                             </div>
-                            <div>
-                                <label className="block text-xs font-bold text-slate-600 mb-1">Jenis Penagihan</label>
-                                <select
-                                    value={billingType}
-                                    onChange={(e) => setBillingType(e.target.value)}
-                                    className="w-full text-sm px-3 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none"
-                                >
-                                    <option value="Gabungan (CST + MRC)">Gabungan (CST + MRC)</option>
-                                    <option value="Hanya CST (Sekali Bayar)">Hanya CST (Sekali Bayar)</option>
-                                    <option value="Hanya MRC (Bulanan)">Hanya MRC (Bulanan)</option>
-                                </select>
-                            </div>
-                            <div>
-                                <label className="block text-xs font-bold text-slate-600 mb-1">Jatuh Tempo</label>
-                                <input
-                                    type="date"
-                                    value={dueDate}
-                                    onChange={(e) => setDueDate(e.target.value)}
-                                    className="w-full text-sm px-3 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none"
-                                    required
+                            <div className="flex-1 bg-slate-200 relative">
+                                {/* Menampilkan pratinjau PDF murni menggunakan iframe */}
+                                <iframe
+                                    src={previewPdf.url}
+                                    className="w-full h-full border-none absolute inset-0"
+                                    title="Invoice Preview"
                                 />
                             </div>
-                            <div className="pt-2">
+                        </div>
+                    </div>
+                )}
+
+                {/* MODAL KONFIRMASI PEMBAYARAN */}
+                {showPaymentModal && (
+                    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4">
+                        <div className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden">
+                            <div className="bg-slate-900 p-4 flex items-center justify-between text-white">
+                                <h3 className="font-bold flex items-center gap-2">
+                                    <CheckCircle2 className="w-5 h-5 text-emerald-400" /> Konfirmasi Pencairan Dana
+                                </h3>
+                                <button onClick={() => setShowPaymentModal(false)} className="text-slate-400 hover:text-white">
+                                    <X className="w-5 h-5" />
+                                </button>
+                            </div>
+                            <form onSubmit={handlePaymentSubmit} className="p-6 space-y-4">
+                                <div className="bg-slate-50 p-3 rounded-xl border border-slate-100 text-center mb-2">
+                                    <p className="text-[11px] text-slate-500 uppercase tracking-wider font-bold">Tagihan PT Comtelindo</p>
+                                    <p className="font-mono font-bold text-indigo-600">{paymentData.invoice_number}</p>
+                                    <p className="text-xl font-black text-slate-900 mt-1">{formatIDR(paymentData.total_amount)}</p>
+                                </div>
+
+                                <div>
+                                    <label className="block text-xs font-bold text-slate-600 mb-1">Tanggal Transfer Masuk</label>
+                                    <input
+                                        type="date"
+                                        value={paymentData.payment_date}
+                                        onChange={(e) => setPaymentData({ ...paymentData, payment_date: e.target.value })}
+                                        className="w-full text-sm px-3 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none"
+                                        required
+                                    />
+                                </div>
+
+                                <div>
+                                    <label className="block text-xs font-bold text-slate-600 mb-1">Nominal Diterima (Rp)</label>
+                                    <input
+                                        type="number"
+                                        value={paymentData.amount}
+                                        onChange={(e) => setPaymentData({ ...paymentData, amount: Number(e.target.value) })}
+                                        className="w-full font-mono text-sm px-3 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none"
+                                        required
+                                    />
+                                </div>
+
+                                <div>
+                                    <label className="block text-xs font-bold text-slate-600 mb-1">Metode Pembayaran</label>
+                                    <select
+                                        value={paymentData.payment_method}
+                                        onChange={(e) => setPaymentData({ ...paymentData, payment_method: e.target.value })}
+                                        className="w-full text-sm px-3 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none"
+                                    >
+                                        <option value="Transfer BCA">Transfer Bank BCA</option>
+                                        <option value="Transfer Mandiri">Transfer Bank Mandiri</option>
+                                        <option value="Cek Giro">Cek / Giro</option>
+                                        <option value="Tunai">Tunai</option>
+                                    </select>
+                                </div>
+
                                 <button
                                     type="submit"
-                                    disabled={isGenerating}
-                                    className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-400 text-white font-bold rounded-xl text-sm transition flex items-center justify-center gap-2 shadow-md"
+                                    disabled={isProcessingPayment}
+                                    className="w-full mt-4 py-3 bg-emerald-500 hover:bg-emerald-600 disabled:bg-slate-400 text-white font-bold rounded-xl text-sm transition shadow-md"
                                 >
-                                    {isGenerating ? 'Menyiapkan PDF...' : 'Kalkulasi & Pratinjau PDF'}
-                                    {!isGenerating && <Eye className="w-4 h-4" />}
+                                    {isProcessingPayment ? 'Mencatat Transaksi...' : 'Tandai Sebagai Lunas'}
                                 </button>
-                            </div>
-                        </form>
+                            </form>
+                        </div>
                     </div>
-
-                    <div className="lg:col-span-2 bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4">
-                        <h2 className="font-bold text-slate-900 text-sm flex items-center gap-2 border-b border-slate-100 pb-3">
-                            <Building2 className="w-4 h-4 text-indigo-600" /> Riwayat Tagihan ke PT Comtelindo
-                        </h2>
-
-                        {isLoading ? (
-                            <p className="text-sm text-slate-500 text-center py-10 animate-pulse">Memuat data brankas...</p>
-                        ) : invoices.length === 0 ? (
-                            <div className="text-center py-12 border-2 border-dashed border-slate-200 rounded-xl bg-slate-50">
-                                <p className="text-sm text-slate-400 font-medium">Belum ada invoice yang diterbitkan.</p>
-                            </div>
-                        ) : (
-                            <div className="overflow-x-auto">
-                                <table className="w-full text-left text-xs">
-                                    <thead className="text-slate-400 bg-slate-50 font-bold uppercase tracking-wider">
-                                        <tr>
-                                            <th className="px-4 py-3 rounded-l-lg">Nomor Invoice</th>
-                                            <th className="px-4 py-3">Jatuh Tempo</th>
-                                            <th className="px-4 py-3 text-right">Total Nilai</th>
-                                            <th className="px-4 py-3 text-center">Status</th>
-                                            <th className="px-4 py-3 text-center rounded-r-lg">Aksi</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody className="divide-y divide-slate-100">
-                                        {invoices.map((inv) => (
-                                            <tr key={inv.id} className="hover:bg-slate-50 transition">
-                                                <td className="px-4 py-4 font-mono font-bold text-indigo-600">
-                                                    {inv.invoice_number}
-                                                    <div className="text-[10px] text-slate-400 font-sans mt-0.5">{inv.kabupatens?.name}</div>
-                                                </td>
-                                                <td className="px-4 py-4 text-slate-500 whitespace-nowrap flex items-center gap-1">
-                                                    <Clock className="w-3 h-3" /> {formatDateIndo(inv.due_date)}
-                                                </td>
-                                                <td className="px-4 py-4 font-bold text-right text-slate-900 whitespace-nowrap">{formatIDR(inv.total_amount)}</td>
-                                                <td className="px-4 py-4 text-center">
-                                                    <span className={`px-2 py-1 rounded-md text-[10px] font-bold uppercase ${inv.status === 'Terkirim' ? 'bg-amber-50 text-amber-600 border border-amber-200' :
-                                                        inv.status === 'Lunas' ? 'bg-emerald-50 text-emerald-600 border border-emerald-200' :
-                                                            inv.status === 'Dibayar Sebagian' ? 'bg-blue-50 text-blue-600 border border-blue-200' :
-                                                                'bg-slate-100 text-slate-600'
-                                                        }`}>
-                                                        {inv.status}
-                                                    </span>
-                                                </td>
-                                                <td className="px-4 py-4 text-center">
-                                                    {inv.status === 'Terkirim' || inv.status === 'Dibayar Sebagian' ? (
-                                                        <button
-                                                            onClick={() => openPaymentModal(inv)}
-                                                            className="text-[10px] bg-indigo-50 text-indigo-700 font-bold px-2 py-1.5 rounded border border-indigo-200 hover:bg-indigo-600 hover:text-white transition whitespace-nowrap"
-                                                        >
-                                                            Terima Dana
-                                                        </button>
-                                                    ) : (
-                                                        <span className="text-[10px] text-slate-400 italic">Selesai</span>
-                                                    )}
-                                                </td>
-                                            </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
-                            </div>
-                        )}
-                    </div>
-                </div>
+                )}
             </div>
-
-            {/* MODAL PRATINJAU PDF (PREVIEW) */}
-            {previewPdf && (
-                <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
-                    <div className="bg-white rounded-2xl shadow-xl w-full max-w-4xl h-[90vh] flex flex-col overflow-hidden">
-                        <div className="bg-slate-900 p-4 flex items-center justify-between text-white shrink-0">
-                            <h3 className="font-bold flex items-center gap-2">
-                                <FileText className="w-5 h-5 text-indigo-400" /> Pratinjau Invoice Resmi
-                            </h3>
-                            <div className="flex items-center gap-4">
-                                <button
-                                    onClick={() => previewPdf.doc.save(previewPdf.fileName)}
-                                    className="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold rounded-lg flex items-center gap-2 transition"
-                                >
-                                    <Download className="w-4 h-4" /> Simpan & Unduh PDF
-                                </button>
-                                <button onClick={() => setPreviewPdf(null)} className="text-slate-400 hover:text-white transition" title="Tutup Preview">
-                                    <X className="w-6 h-6" />
-                                </button>
-                            </div>
-                        </div>
-                        <div className="flex-1 bg-slate-200 relative">
-                            {/* Menampilkan pratinjau PDF murni menggunakan iframe */}
-                            <iframe
-                                src={previewPdf.url}
-                                className="w-full h-full border-none absolute inset-0"
-                                title="Invoice Preview"
-                            />
-                        </div>
-                    </div>
-                </div>
-            )}
-
-            {/* MODAL KONFIRMASI PEMBAYARAN */}
-            {showPaymentModal && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4">
-                    <div className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden">
-                        <div className="bg-slate-900 p-4 flex items-center justify-between text-white">
-                            <h3 className="font-bold flex items-center gap-2">
-                                <CheckCircle2 className="w-5 h-5 text-emerald-400" /> Konfirmasi Pencairan Dana
-                            </h3>
-                            <button onClick={() => setShowPaymentModal(false)} className="text-slate-400 hover:text-white">
-                                <X className="w-5 h-5" />
-                            </button>
-                        </div>
-                        <form onSubmit={handlePaymentSubmit} className="p-6 space-y-4">
-                            <div className="bg-slate-50 p-3 rounded-xl border border-slate-100 text-center mb-2">
-                                <p className="text-[11px] text-slate-500 uppercase tracking-wider font-bold">Tagihan PT Comtelindo</p>
-                                <p className="font-mono font-bold text-indigo-600">{paymentData.invoice_number}</p>
-                                <p className="text-xl font-black text-slate-900 mt-1">{formatIDR(paymentData.total_amount)}</p>
-                            </div>
-
-                            <div>
-                                <label className="block text-xs font-bold text-slate-600 mb-1">Tanggal Transfer Masuk</label>
-                                <input
-                                    type="date"
-                                    value={paymentData.payment_date}
-                                    onChange={(e) => setPaymentData({ ...paymentData, payment_date: e.target.value })}
-                                    className="w-full text-sm px-3 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none"
-                                    required
-                                />
-                            </div>
-
-                            <div>
-                                <label className="block text-xs font-bold text-slate-600 mb-1">Nominal Diterima (Rp)</label>
-                                <input
-                                    type="number"
-                                    value={paymentData.amount}
-                                    onChange={(e) => setPaymentData({ ...paymentData, amount: Number(e.target.value) })}
-                                    className="w-full font-mono text-sm px-3 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none"
-                                    required
-                                />
-                            </div>
-
-                            <div>
-                                <label className="block text-xs font-bold text-slate-600 mb-1">Metode Pembayaran</label>
-                                <select
-                                    value={paymentData.payment_method}
-                                    onChange={(e) => setPaymentData({ ...paymentData, payment_method: e.target.value })}
-                                    className="w-full text-sm px-3 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none"
-                                >
-                                    <option value="Transfer BCA">Transfer Bank BCA</option>
-                                    <option value="Transfer Mandiri">Transfer Bank Mandiri</option>
-                                    <option value="Cek Giro">Cek / Giro</option>
-                                    <option value="Tunai">Tunai</option>
-                                </select>
-                            </div>
-
-                            <button
-                                type="submit"
-                                disabled={isProcessingPayment}
-                                className="w-full mt-4 py-3 bg-emerald-500 hover:bg-emerald-600 disabled:bg-slate-400 text-white font-bold rounded-xl text-sm transition shadow-md"
-                            >
-                                {isProcessingPayment ? 'Mencatat Transaksi...' : 'Tandai Sebagai Lunas'}
-                            </button>
-                        </form>
-                    </div>
-                </div>
-            )}
         </div>
     );
 }
