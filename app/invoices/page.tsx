@@ -85,14 +85,8 @@ export default function InvoicePage() {
         }
     };
 
-    const generateInvoiceNumber = () => {
-        const date = new Date();
-        const monthRoman = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X', 'XI', 'XII'][date.getMonth()];
-        const year = date.getFullYear();
-        const count = invoices.length + 1;
-        const paddedCount = count.toString().padStart(3, '0');
-        return `INV/BFR/${year}/${monthRoman}/${paddedCount}`;
-    };
+    // Nomor invoice sekarang di-generate oleh database (function generate_document_number)
+    // supaya dijamin unik & atomik, tidak lagi dihitung dari invoices.length di browser.
 
     const formatDateIndo = (dateStr: string) => {
         const months = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
@@ -162,7 +156,16 @@ export default function InvoicePage() {
             const ppn11 = subtotalDPP * 0.11;
             const grandTotal = subtotalDPP + ppn11;
 
-            const invNumber = generateInvoiceNumber();
+            // Minta nomor invoice ke database (atomik, tidak akan duplikat)
+            const { data: invNumber, error: numErr } = await supabase.rpc('generate_document_number', {
+                p_doc_type: 'INV',
+                p_prefix: 'INV/BFR'
+            });
+
+            if (numErr || !invNumber) {
+                throw new Error('Gagal membuat nomor invoice: ' + (numErr?.message || 'tidak ada respons dari server.'));
+            }
+
             const issueDate = new Date().toISOString().split('T')[0];
 
             const { data: newInv, error: invErr } = await supabase
@@ -412,71 +415,20 @@ export default function InvoicePage() {
         e.preventDefault();
         setIsProcessingPayment(true);
         try {
-            // 1. Catat ke tabel riwayat pembayaran (invoice_payments)
-            const { error: paymentErr } = await supabase
-                .from('invoice_payments')
-                .insert({
-                    invoice_id: paymentData.invoice_id,
-                    payment_date: paymentData.payment_date,
-                    amount: paymentData.amount,
-                    payment_method: paymentData.payment_method
-                });
+            // Satu panggilan ke database: pencatatan pembayaran, update status invoice,
+            // dan jurnal debit/kredit semuanya terjadi dalam SATU transaksi atomik.
+            // Kalau ada langkah yang gagal, semua otomatis dibatalkan (rollback) —
+            // tidak akan ada lagi kondisi status invoice "Lunas" tapi jurnal tidak tercatat.
+            const { data, error } = await supabase.rpc('record_invoice_payment', {
+                p_invoice_id: paymentData.invoice_id,
+                p_payment_date: paymentData.payment_date,
+                p_amount: paymentData.amount,
+                p_payment_method: paymentData.payment_method
+            });
 
-            if (paymentErr) throw paymentErr;
+            if (error) throw error;
 
-            // 2. Update status di tabel invoices
-            const newStatus = paymentData.amount >= paymentData.total_amount ? 'Lunas' : 'Dibayar Sebagian';
-            const { error: invUpdateErr } = await supabase
-                .from('invoices')
-                .update({ status: newStatus })
-                .eq('id', paymentData.invoice_id);
-
-            if (invUpdateErr) throw invUpdateErr;
-
-            // =================================================================
-            // 3. INTEGRASI JURNAL KAS (PRD KEU-01) - DOUBLE ENTRY BOOKKEEPING
-            // =================================================================
-
-            // A. Buat referensi unik untuk transaksi kas
-            const randHex = Math.floor(1000 + Math.random() * 9000);
-            const refCode = `KM-${paymentData.payment_date.replace(/-/g, '')}-${randHex}`;
-
-            // B. Masukkan ke tabel induk transaksi
-            const { data: txData, error: txError } = await supabase
-                .from('transactions')
-                .insert({
-                    date: paymentData.payment_date,
-                    description: `Pencairan Dana Invoice ${paymentData.invoice_number} via ${paymentData.payment_method}`,
-                    reference_code: refCode
-                })
-                .select().single();
-
-            if (txError) throw txError;
-
-            // C. Masukkan pencatatan debit/kredit ke jurnal
-            // Debit: Kas & Setara Kas (acc-kas-101) bertambah
-            // Kredit: Pendapatan Penjualan Layanan (acc-rev-401) bertambah
-            const { error: jeError } = await supabase
-                .from('journal_entries')
-                .insert([
-                    {
-                        transaction_id: txData.id,
-                        account_id: 'acc-kas-101',
-                        debit: paymentData.amount,
-                        credit: 0
-                    },
-                    {
-                        transaction_id: txData.id,
-                        account_id: 'acc-rev-401',
-                        debit: 0,
-                        credit: paymentData.amount
-                    }
-                ]);
-
-            if (jeError) throw jeError;
-            // =================================================================
-
-            alert(`Pembayaran berhasil dicatat! Status Invoice: ${newStatus} & Dana telah masuk ke Jurnal Kas (Ref: ${refCode}).`);
+            alert(`Pembayaran berhasil dicatat! Status Invoice: ${data.status} & Dana telah masuk ke Jurnal Kas (Ref: ${data.reference_code}).`);
             setShowPaymentModal(false);
             fetchData();
 

@@ -60,13 +60,8 @@ export default function BastPage() {
         return hari[date.getDay()];
     };
 
-    const generateBastNumber = () => {
-        const date = new Date(handoverDate);
-        const monthRoman = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X', 'XI', 'XII'][date.getMonth()];
-        const year = date.getFullYear();
-        const randHex = Math.floor(10 + Math.random() * 90); // Dummy counter
-        return `BAST/BFR/${year}/${monthRoman}/${randHex}`;
-    };
+    // Nomor BAST sekarang di-generate oleh database (function generate_document_number)
+    // supaya dijamin unik & berurutan, tidak lagi pakai angka random.
 
     const handleCreateBast = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -98,7 +93,16 @@ export default function BastPage() {
                 titik.status
             ]);
 
-            const bastNumber = generateBastNumber();
+            // Minta nomor BAST ke database (atomik, tidak akan duplikat)
+            const { data: bastNumber, error: numErr } = await supabase.rpc('generate_document_number', {
+                p_doc_type: 'BAST',
+                p_prefix: 'BAST/BFR'
+            });
+
+            if (numErr || !bastNumber) {
+                throw new Error('Gagal membuat nomor BAST: ' + (numErr?.message || 'tidak ada respons dari server.'));
+            }
+
             const doc = await generatePDF(bastNumber, handoverDate, selectedKabData, tableRows, titikData.length);
 
             const pdfBlob = doc.output('blob');
