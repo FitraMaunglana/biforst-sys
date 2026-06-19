@@ -1,8 +1,12 @@
 "use client";
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import * as xlsx from 'xlsx';
 import { supabase } from '../../src/lib/supabaseClient';
 import { UploadCloud, FileSpreadsheet, CheckCircle2, AlertTriangle, Loader2 } from 'lucide-react';
+
+const ADMIN_EMAIL = 'biforsttechnologysolution@gmail.com';
+
 
 interface TitikParsed {
     pic: string;
@@ -19,6 +23,8 @@ interface TitikParsed {
 }
 
 export default function ImportPage() {
+    const router = useRouter();
+    const [isCheckingAuth, setIsCheckingAuth] = useState(true);
     const [fileName, setFileName] = useState<string | null>(null);
     const [sheetNames, setSheetNames] = useState<string[]>([]);
     const [activeSheet, setActiveSheet] = useState<string>('');
@@ -28,6 +34,22 @@ export default function ImportPage() {
     // Status Proses
     const [isImporting, setIsImporting] = useState(false);
     const [importLog, setImportLog] = useState<string[]>([]);
+
+    useEffect(() => {
+        const checkAuth = async () => {
+            const { data: { session } } = await supabase.auth.getSession();
+            if (!session) {
+                router.push('/login');
+            } else if (session.user.email !== ADMIN_EMAIL) {
+                alert('AKSES DITOLAK: Halaman ini hanya untuk Administrator.');
+                router.push('/');
+            } else {
+                setIsCheckingAuth(false);
+            }
+        };
+        checkAuth();
+    }, [router]);
+
 
     const extractDataFromSheet = (ws: xlsx.WorkSheet) => {
         const rows: any[] = xlsx.utils.sheet_to_json(ws);
@@ -210,6 +232,14 @@ export default function ImportPage() {
             setIsImporting(false);
         }
     };
+
+    if (isCheckingAuth) {
+        return (
+            <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+                <Loader2 className="animate-spin text-slate-400" size={32} />
+            </div>
+        );
+    }
 
     return (
         <div className="min-h-screen bg-slate-50 p-8 font-sans text-slate-800">
