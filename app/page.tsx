@@ -4,6 +4,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { supabase } from '../src/lib/supabaseClient';
 import TransactionForm from '../src/components/TransactionForm';
 import Sidebar from '../src/components/Sidebar';
+import { PipelineDonutChart, KabupatenProgressChart } from '../src/components/DashboardCharts';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import {
@@ -435,6 +436,21 @@ function DashboardContent() {
                     const colors = ['bg-slate-300', 'bg-blue-400', 'bg-purple-400', 'bg-amber-400', 'bg-emerald-400', 'bg-teal-500'];
                     return pct > 0 ? <div key={idx} className={`${colors[idx]} h-full transition-all duration-300`} style={{ width: `${pct}%` }} /> : null;
                   })}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
+                  <h3 className="font-bold text-slate-900 text-xs uppercase tracking-wider text-slate-400 flex items-center gap-2 mb-2">
+                    <BarChart3 className="w-4 h-4 text-indigo-600" /> Distribusi Tahapan Pipeline
+                  </h3>
+                  <PipelineDonutChart statusCounts={statusCounts} pipelineStatuses={PIPELINE_STATUSES} />
+                </div>
+                <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
+                  <h3 className="font-bold text-slate-900 text-xs uppercase tracking-wider text-slate-400 flex items-center gap-2 mb-2">
+                    <Map className="w-4 h-4 text-indigo-600" /> Progres per Kabupaten
+                  </h3>
+                  <KabupatenProgressChart kabupatenAgregat={kabupatenAgregat} />
                 </div>
               </div>
 
