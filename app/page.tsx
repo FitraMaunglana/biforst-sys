@@ -1,5 +1,5 @@
 "use client";
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { supabase } from '../src/lib/supabaseClient';
 import TransactionForm from '../src/components/TransactionForm';
@@ -38,7 +38,7 @@ const PIPELINE_STATUSES = ['Belum Mulai', 'Pitching', 'Coverage', 'Dealing', 'Ko
 // EMAIL ADMIN MASTER
 const ADMIN_EMAIL = 'biforsttechnologysolution@gmail.com';
 
-export default function DashboardPage() {
+function DashboardContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
@@ -572,5 +572,20 @@ export default function DashboardPage() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function DashboardPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+        <div className="flex flex-col items-center gap-3 text-slate-500">
+          <Lock className="w-8 h-8 animate-pulse text-indigo-600" />
+          <p className="font-mono text-sm font-medium">Membuka Enkripsi Konsol ERP...</p>
+        </div>
+      </div>
+    }>
+      <DashboardContent />
+    </Suspense>
   );
 }
