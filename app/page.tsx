@@ -5,6 +5,7 @@ import { supabase } from '../src/lib/supabaseClient';
 import TransactionForm from '../src/components/TransactionForm';
 import Sidebar from '../src/components/Sidebar';
 import { PipelineDonutChart, KabupatenProgressChart } from '../src/components/DashboardCharts';
+import { KasTrendChart } from '../src/components/KasTrendChart';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import {
@@ -526,6 +527,13 @@ function DashboardContent() {
                   <p className="text-slate-400 font-medium text-sm">Saldo Aktual Perusahaan</p>
                   <h3 className="text-3xl font-black mt-2 font-mono text-emerald-400">{formatIDR(kasBalance.saldo)}</h3>
                 </div>
+              </div>
+
+              <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
+                <h3 className="font-bold text-slate-900 text-xs uppercase tracking-wider text-slate-400 flex items-center gap-2 mb-2">
+                  <TrendingUp className="w-4 h-4 text-indigo-600" /> Tren Kas Masuk vs Keluar
+                </h3>
+                <KasTrendChart transactions={transactions} />
               </div>
 
               <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
