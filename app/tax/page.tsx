@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '../../src/lib/supabaseClient';
 import Sidebar from '../../src/components/Sidebar';
+import { PpnTrendChart } from '../../src/components/PpnTrendChart';
 import {
     Receipt, Plus, X, CheckCircle2, Clock, TrendingUp, TrendingDown,
     Minus, Loader2, ChevronDown, AlertTriangle
@@ -306,6 +307,15 @@ export default function TaxPage() {
                     </div>
 
                     {/* BREAKDOWN TAHUNAN (kalau mode tahunan) */}
+                    {viewMode === 'tahunan' && (
+                        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
+                            <h3 className="font-bold text-slate-900 text-xs uppercase tracking-wider text-slate-400 flex items-center gap-2 mb-2">
+                                <TrendingUp className="w-4 h-4 text-violet-600" /> Tren PPN Keluaran vs Masukan — {selectedYear}
+                            </h3>
+                            <PpnTrendChart data={yearlyData} />
+                        </div>
+                    )}
+
                     {viewMode === 'tahunan' && (
                         <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
                             <div className="px-5 py-4 border-b border-slate-100 font-bold text-sm text-slate-700">Breakdown per Bulan — {selectedYear}</div>
