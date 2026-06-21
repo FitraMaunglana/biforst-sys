@@ -93,6 +93,26 @@ function DashboardContent() {
     initDashboard();
   }, [router]);
 
+  // Dengarkan perubahan realtime di titik_lokasi dan titik_harga,
+  // supaya dashboard otomatis update tanpa refresh saat ada perubahan
+  // dari Master Data -- baik di tab ini sendiri maupun dari device lain.
+  useEffect(() => {
+    const channel = supabase
+      .channel('dashboard-sync')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'titik_lokasi' }, () => {
+        fetchDashboardData();
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'titik_harga' }, () => {
+        fetchDashboardData();
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const fetchDashboardData = async () => {
     setIsLoading(true);
     try {

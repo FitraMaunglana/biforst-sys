@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '../../src/lib/supabaseClient';
 import Sidebar from '../../src/components/Sidebar';
+import FinancialSummaryPanel from '../../src/components/FinancialSummaryPanel';
 import {
     Database, Edit2, Save, X, Search, ShieldAlert, CheckCircle
 } from 'lucide-react';
@@ -154,6 +155,8 @@ export default function MasterDataPage() {
                             </div>
                         </div>
                     </div>
+
+                    <FinancialSummaryPanel />
 
                     {/* KONTEN */}
                     <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-6">
