@@ -87,7 +87,6 @@ export default function ImportPage() {
             setWorkbook(wb);
             setSheetNames(wb.SheetNames);
 
-            // Filter sheet yang kemungkinan besar bukan sheet kabupaten (misal 'Ringkasan' atau 'Keuangan')
             const probableKabupatenSheet = wb.SheetNames.find(name => name.toLowerCase().includes('kab')) || wb.SheetNames[0];
             setActiveSheet(probableKabupatenSheet);
 
@@ -138,7 +137,6 @@ export default function ImportPage() {
                 proj = newProj;
             }
 
-            // [TAMBAHAN] Validasi keamanan ekstra untuk menjinakkan TypeScript
             if (!proj) throw new Error("Gagal menginisialisasi proyek utama.");
 
             // 2. Siapkan Entri Kabupaten
@@ -146,7 +144,7 @@ export default function ImportPage() {
                 .from('kabupatens')
                 .select('id')
                 .eq('name', activeSheet)
-                .eq('project_id', proj.id) // TypeScript kini tahu proj pasti tidak null
+                .eq('project_id', proj.id)
                 .single();
 
             if (!kab) {
@@ -164,52 +162,99 @@ export default function ImportPage() {
                 kab = newKab;
             }
 
-            // [TAMBAHAN] Validasi keamanan ekstra untuk menjinakkan TypeScript
             if (!kab) throw new Error("Gagal menginisialisasi tabel kabupaten.");
 
-            // 3. Loop Injeksi Titik dan Harga
+            // 3. Loop Sinkronisasi Titik dan Harga
+            // PERUBAHAN PENTING: titik yang sudah ada di database TIDAK lagi dilewati.
+            // Excel adalah sumber kebenaran -> data lama di-UPDATE dengan data terbaru
+            // dari file yang diupload, termasuk status pipeline.
             let successCount = 0;
-            addLog(`Mempersiapkan injeksi ${parsedData.length} titik koordinat...`);
+            let updatedCount = 0;
+            let newCount = 0;
+            addLog(`Mempersiapkan sinkronisasi ${parsedData.length} titik koordinat...`);
 
             for (const titik of parsedData) {
-                // Cek duplikasi berdasar nama dukcapil dan kabupaten
                 const { data: existingTitik } = await supabase
                     .from('titik_lokasi')
                     .select('id')
-                    .eq('kabupaten_id', kab.id) // TypeScript kini tahu kab pasti tidak null
+                    .eq('kabupaten_id', kab.id)
                     .eq('dukcapil_name', titik.dukcapil)
                     .single();
 
+                let titikId: string;
+
                 if (existingTitik) {
-                    addLog(`[Lewati] Titik ${titik.dukcapil} sudah ada di database.`);
-                    continue; // Skip jika sudah ada agar tidak ganda
+                    // SUDAH ADA -> UPDATE dengan data terbaru dari Excel
+                    const { error: errUpdate } = await supabase
+                        .from('titik_lokasi')
+                        .update({
+                            address: titik.alamat,
+                            coordinates: titik.koordinat,
+                            isp_name: titik.isp,
+                            status: titik.status,
+                            notes: titik.catatan
+                        })
+                        .eq('id', existingTitik.id);
+
+                    if (errUpdate) {
+                        addLog(`[Gagal Update] Lokasi ${titik.dukcapil}: ${errUpdate.message}`);
+                        continue;
+                    }
+                    titikId = existingTitik.id;
+                    updatedCount++;
+                    addLog(`[Update] Titik ${titik.dukcapil} disinkronkan.`);
+                } else {
+                    // BELUM ADA -> INSERT baris baru
+                    const { data: newTitik, error: errTitik } = await supabase
+                        .from('titik_lokasi')
+                        .insert({
+                            kabupaten_id: kab.id,
+                            dukcapil_name: titik.dukcapil,
+                            address: titik.alamat,
+                            coordinates: titik.koordinat,
+                            isp_name: titik.isp,
+                            status: titik.status,
+                            notes: titik.catatan
+                        })
+                        .select().single();
+
+                    if (errTitik || !newTitik) {
+                        addLog(`[Gagal Insert] Lokasi ${titik.dukcapil}: ${errTitik?.message || 'tidak ada respons'}`);
+                        continue;
+                    }
+                    titikId = newTitik.id;
+                    newCount++;
+                    addLog(`[Baru] Titik ${titik.dukcapil} ditambahkan.`);
                 }
 
-                // Injeksi Lokasi (Data Lapangan)
-                const { data: newTitik, error: errTitik } = await supabase
-                    .from('titik_lokasi')
-                    .insert({
-                        kabupaten_id: kab.id,
-                        dukcapil_name: titik.dukcapil,
-                        address: titik.alamat,
-                        coordinates: titik.koordinat,
-                        isp_name: titik.isp,
-                        status: titik.status,
-                        notes: titik.catatan
-                    })
-                    .select().single();
+                // Sinkronkan Harga (UPDATE jika sudah ada, INSERT jika belum)
+                const { data: existingHarga } = await supabase
+                    .from('titik_harga')
+                    .select('id')
+                    .eq('titik_id', titikId)
+                    .single();
 
-                if (errTitik) {
-                    addLog(`[Gagal] Lokasi ${titik.dukcapil}: ${errTitik.message}`);
-                    continue;
-                }
+                if (existingHarga) {
+                    const { error: errHargaUpdate } = await supabase
+                        .from('titik_harga')
+                        .update({
+                            modal_mrc: titik.modal_mrc,
+                            modal_cst: titik.modal_cst,
+                            harga_jual_mrc: titik.hj_mrc,
+                            harga_jual_cst: titik.hj_cst
+                        })
+                        .eq('id', existingHarga.id);
 
-                // Injeksi Harga (Data Rahasia)
-                if (newTitik) {
+                    if (errHargaUpdate) {
+                        addLog(`[Peringatan] Gagal update harga untuk ${titik.dukcapil}`);
+                    } else {
+                        successCount++;
+                    }
+                } else {
                     const { error: errHarga } = await supabase
                         .from('titik_harga')
                         .insert({
-                            titik_id: newTitik.id,
+                            titik_id: titikId,
                             modal_mrc: titik.modal_mrc,
                             modal_cst: titik.modal_cst,
                             harga_jual_mrc: titik.hj_mrc,
@@ -224,7 +269,7 @@ export default function ImportPage() {
                 }
             }
 
-            addLog(`✅ Misi Selesai: ${successCount} titik berhasil masuk brankas Supabase.`);
+            addLog(`✅ Misi Selesai: ${newCount} titik baru, ${updatedCount} titik diperbarui, ${successCount} harga tersinkron.`);
 
         } catch (error: any) {
             addLog(`❌ Kesalahan Fatal: ${error.message}`);
@@ -319,7 +364,7 @@ export default function ImportPage() {
                                     <span>Tindakan Sistem</span>
                                 </div>
                                 <p className="text-sm text-slate-300">
-                                    Sistem akan membuat/mencari proyek <strong>Ekspansi Jateng</strong>, mendaftarkan kabupaten <strong>{activeSheet}</strong>, lalu menyuntikkan data ke tabel RLS secara terpisah.
+                                    Sistem akan membuat/mencari proyek <strong>Ekspansi Jateng</strong>, mendaftarkan kabupaten <strong>{activeSheet}</strong>, lalu menyinkronkan data ke database — titik baru akan ditambahkan, titik yang sudah ada akan <strong>diperbarui</strong> mengikuti data terbaru dari Excel ini.
                                 </p>
 
                                 <button
@@ -328,7 +373,7 @@ export default function ImportPage() {
                                     className="w-full flex items-center justify-center gap-2 bg-emerald-500 hover:bg-emerald-600 disabled:bg-slate-700 text-white font-bold py-3 px-4 rounded-xl transition"
                                 >
                                     {isImporting ? <Loader2 className="w-5 h-5 animate-spin" /> : <CheckCircle2 className="w-5 h-5" />}
-                                    {isImporting ? 'Menyuntikkan Data...' : 'Mulai Injeksi ke Database'}
+                                    {isImporting ? 'Menyinkronkan Data...' : 'Mulai Sinkronisasi ke Database'}
                                 </button>
                             </div>
 
