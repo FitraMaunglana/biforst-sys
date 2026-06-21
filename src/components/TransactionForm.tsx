@@ -9,7 +9,6 @@ import {
     ArrowDownLeft,
     CheckCircle,
     Info,
-    Code,
     X,
     ListOrdered,
     PlusCircle,
@@ -75,7 +74,6 @@ export default function TransactionForm({ onSuccess }: TransactionFormProps) {
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [successMessage, setSuccessMessage] = useState<string | null>(null);
     const [errorMessage, setErrorMessage] = useState<string | null>(null);
-    const [showDevDetails, setShowDevDetails] = useState<boolean>(true);
 
     // Formatter functions
     const formatRupiah = (val: string): string => {
@@ -259,8 +257,6 @@ export default function TransactionForm({ onSuccess }: TransactionFormProps) {
             setIsSubmitting(false);
         }
     };
-
-    const preview = getDoubleEntryPreview();
 
     return (
         <div className="w-full max-w-4xl mx-auto space-y-6" id="biforst-sys-transaction-container">
@@ -469,93 +465,6 @@ export default function TransactionForm({ onSuccess }: TransactionFormProps) {
 
                     </form>
                 </div>
-            </div>
-
-            {/* Under-The-Hood Double Entry Developer Sandbox Preview Box */}
-            <div className="bg-slate-50 border border-slate-200/60 rounded-2xl p-5 md:p-6 shadow-sm">
-                <div className="flex items-center justify-between border-b border-slate-200 pb-3 mb-4">
-                    <div className="flex items-center gap-2">
-                        <div className="p-1.5 bg-slate-200 rounded-lg text-slate-700">
-                            <Code className="w-4 h-4" />
-                        </div>
-                        <div>
-                            <h3 className="font-bold text-slate-800 text-sm md:text-base">Under-the-Hood: Double-Entry Matrix</h3>
-                            <p className="text-slate-500 text-xs mt-0.5">Analisis pemetaan debit / kredit instan untuk database Supabase Anda</p>
-                        </div>
-                    </div>
-                    <button
-                        type="button"
-                        onClick={() => setShowDevDetails(!showDevDetails)}
-                        className="text-xs text-slate-500 hover:text-slate-800 underline cursor-pointer"
-                    >
-                        {showDevDetails ? 'Sembunyikan' : 'Tampilkan Detail'}
-                    </button>
-                </div>
-
-                {showDevDetails && (
-                    <div className="space-y-4">
-                        <p className="text-xs text-slate-600 leading-relaxed">
-                            Meskipun UI sangat sederhana bagi staff lapangan (hanya memilih Kas Masuk/Keluar &amp; Kategori), di belakang layar sistem memaksakan aturan akuntansi keuangan berpasangan dengan membagi nominal tersebut ke baris jurnal entry penyeimbang secara instan:
-                        </p>
-
-                        {preview ? (
-                            <div className="overflow-hidden bg-white border border-slate-200 rounded-xl">
-                                <div className="grid grid-cols-12 bg-slate-100 px-4 py-2 text-xs font-bold text-slate-700 border-b border-slate-200">
-                                    <div className="col-span-3">Akun Bookkeeping</div>
-                                    <div className="col-span-3 text-center">Kode Akun</div>
-                                    <div className="col-span-2 text-center">Tipe</div>
-                                    <div className="col-span-2 text-right">Debit</div>
-                                    <div className="col-span-2 text-right">Kredit</div>
-                                </div>
-
-                                {/* DEBIT ROW */}
-                                <div className="grid grid-cols-12 px-4 py-3 text-xs border-b border-slate-100 items-center">
-                                    <div className="col-span-3 font-semibold text-slate-800">{preview.debit.account.name}</div>
-                                    <div className="col-span-3 text-center font-mono bg-slate-50 rounded py-0.5 px-1.5 text-slate-600 inline-block mx-auto text-[10px]">
-                                        {preview.debit.account.code}
-                                    </div>
-                                    <div className="col-span-2 text-center text-slate-500">{preview.debit.account.type}</div>
-                                    <div className="col-span-2 text-right text-emerald-600 font-bold">
-                                        {formatRupiah(preview.debit.amount.toString())}
-                                    </div>
-                                    <div className="col-span-2 text-right text-slate-400 font-mono">-</div>
-                                </div>
-
-                                {/* CREDIT ROW */}
-                                <div className="grid grid-cols-12 px-4 py-3 text-xs items-center">
-                                    <div className="col-span-3 font-semibold text-slate-800 pl-4">{preview.credit.account.name}</div>
-                                    <div className="col-span-3 text-center font-mono bg-slate-50 rounded py-0.5 px-1.5 text-slate-600 inline-block mx-auto text-[10px]">
-                                        {preview.credit.account.code}
-                                    </div>
-                                    <div className="col-span-2 text-center text-slate-500">{preview.credit.account.type}</div>
-                                    <div className="col-span-2 text-right text-slate-400 font-mono">-</div>
-                                    <div className="col-span-2 text-right text-rose-600 font-bold">
-                                        {formatRupiah(preview.credit.amount.toString())}
-                                    </div>
-                                </div>
-                            </div>
-                        ) : (
-                            <div className="text-center py-6 border border-dashed border-slate-300 rounded-xl bg-slate-50/50 text-slate-400 text-xs">
-                                Masukkan nilai nominal Rupiah dan pilih kategori akun untuk melihat skema mutasi instan di sini.
-                            </div>
-                        )}
-
-                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2 text-[11px] text-slate-500">
-                            <div className="flex items-center gap-1.5 bg-white p-2.5 rounded-lg border border-slate-200">
-                                <span className="w-1.5 h-1.5 bg-indigo-500 rounded-full"></span>
-                                <span>Tabel 1: <strong>transactions</strong> insert (1 baris)</span>
-                            </div>
-                            <div className="flex items-center gap-1.5 bg-white p-2.5 rounded-lg border border-slate-200">
-                                <span className="w-1.5 h-1.5 bg-sky-500 rounded-full"></span>
-                                <span>Tabel 2: <strong>journal_entries</strong> (2 baris penyeimbang)</span>
-                            </div>
-                            <div className="flex items-center gap-1.5 bg-white p-2.5 rounded-lg border border-slate-200">
-                                <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full"></span>
-                                <span>Balancing status: <strong>Matched (Dr = Cr)</strong></span>
-                            </div>
-                        </div>
-                    </div>
-                )}
             </div>
         </div>
     );
