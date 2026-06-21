@@ -6,12 +6,13 @@ import TransactionForm from '../src/components/TransactionForm';
 import Sidebar from '../src/components/Sidebar';
 import { PipelineDonutChart, KabupatenProgressChart } from '../src/components/DashboardCharts';
 import { KasTrendChart } from '../src/components/KasTrendChart';
+import ExecutionChecklistModal from '../src/components/ExecutionChecklistModal';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import {
   Layers, TrendingUp, MapPin, Users, Database, Lock, RefreshCcw, BarChart3,
   DollarSign, Briefcase, CheckCircle2, Map, Clock, User, FileText, ArrowUpRight,
-  ArrowDownLeft, Wallet, Download, Eye, X, ShieldAlert
+  ArrowDownLeft, Wallet, Download, Eye, X, ShieldAlert, ListTodo
 } from 'lucide-react';
 
 interface TitikData {
@@ -48,6 +49,7 @@ function DashboardContent() {
   const [activeTab, setActiveTab] = useState<'proyek' | 'kas'>('proyek');
   const [userRole, setUserRole] = useState<'admin' | 'staff'>('staff');
   const [currentUser, setCurrentUser] = useState('');
+  const [checklistTitik, setChecklistTitik] = useState<{ id: string; label: string } | null>(null);
 
   // Sinkronkan tab aktif dengan query param ?tab=kas di URL,
   // supaya sidebar bisa langsung mengarahkan ke tab tertentu.
@@ -173,8 +175,10 @@ function DashboardContent() {
       const { error } = await supabase.from('titik_lokasi').update({ status: newStatus }).eq('id', titikId);
       if (error) throw error;
       setTitikList(prev => prev.map(item => item.id === titikId ? { ...item, status: newStatus } : item));
-    } catch (err) {
-      alert("Gagal memperbarui status. Periksa jaringan Anda.");
+    } catch (err: any) {
+      // Pesan dari trigger database (misal checklist belum lengkap) sudah jelas,
+      // tampilkan langsung alih-alih pesan generik supaya staf tahu harus apa.
+      alert(err?.message || "Gagal memperbarui status. Periksa jaringan Anda.");
     } finally {
       setIsUpdatingStatusId(null);
     }
@@ -486,9 +490,15 @@ function DashboardContent() {
                   <div className="space-y-3.5 max-h-[480px] overflow-y-auto pr-1">
                     {filteredTitikByKabupaten.map((titik) => (
                       <div key={titik.id} className="p-4 rounded-xl border border-slate-200 bg-slate-50/50 flex justify-between items-start gap-4">
-                        <div className="space-y-1">
+                        <div className="space-y-1.5">
                           <h4 className="font-bold text-slate-900 text-sm">Kec. {titik.dukcapil_name}</h4>
                           <p className="text-[11px] text-slate-500 line-clamp-1">{titik.address}</p>
+                          <button
+                            onClick={() => setChecklistTitik({ id: titik.id, label: titik.dukcapil_name })}
+                            className="flex items-center gap-1 text-[11px] font-bold text-indigo-600 hover:text-indigo-800"
+                          >
+                            <ListTodo size={12} /> Checklist Eksekusi
+                          </button>
                         </div>
                         <div className="w-[35%] text-right shrink-0">
                           <select
@@ -594,6 +604,14 @@ function DashboardContent() {
             <div className="flex-1 bg-slate-200 relative"><iframe src={previewReportPdf.url} className="w-full h-full border-none absolute inset-0" title="Report Preview" /></div>
           </div>
         </div>
+      )}
+
+      {checklistTitik && (
+        <ExecutionChecklistModal
+          titikId={checklistTitik.id}
+          titikLabel={checklistTitik.label}
+          onClose={() => setChecklistTitik(null)}
+        />
       )}
     </div>
   );
