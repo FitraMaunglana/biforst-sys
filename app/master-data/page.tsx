@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation';
 import { supabase } from '../../src/lib/supabaseClient';
 import Sidebar from '../../src/components/Sidebar';
 import FinancialSummaryPanel from '../../src/components/FinancialSummaryPanel';
+import CurrencyInput from '../../src/components/CurrencyInput';
 import {
     Database, Edit2, Save, X, Search, ShieldAlert, CheckCircle
 } from 'lucide-react';
@@ -201,7 +202,7 @@ export default function MasterDataPage() {
                                             const isEditing = editingId === titik.id;
 
                                             return (
-                                                <tr key={titik.id} className={isEditing ? "bg-indigo-50/50" : "hover:bg-slate-50 transition"}>
+                                                <tr key={titik.id} className={isEditing ? "bg-indigo-50 ring-2 ring-indigo-300 ring-inset" : "hover:bg-slate-50 transition"}>
                                                     <td className="px-4 py-4">
                                                         <span className="font-bold text-slate-800">{titik.dukcapil_name}</span>
                                                         <span className="block text-[10px] text-slate-400">{titik.status}</span>
@@ -218,14 +219,19 @@ export default function MasterDataPage() {
                                                     {/* KOLOM CST */}
                                                     <td className="px-4 py-4 bg-slate-50">
                                                         {isEditing ? (
-                                                            <input type="number" value={editForm.modal_cst} onChange={e => setEditForm({ ...editForm, modal_cst: Number(e.target.value) })} className="w-24 p-1.5 border rounded text-xs font-mono" />
+                                                            <CurrencyInput value={editForm.modal_cst} onChange={(v) => setEditForm({ ...editForm, modal_cst: v })} className="w-28 p-1.5 border rounded text-xs font-mono" />
                                                         ) : (
                                                             <span className="text-slate-500 font-mono">{formatIDR(harga?.modal_cst || 0)}</span>
                                                         )}
                                                     </td>
                                                     <td className="px-4 py-4 bg-slate-50">
                                                         {isEditing ? (
-                                                            <input type="number" value={editForm.harga_jual_cst} onChange={e => setEditForm({ ...editForm, harga_jual_cst: Number(e.target.value) })} className="w-24 p-1.5 border border-indigo-300 rounded text-xs font-mono font-bold text-indigo-700" />
+                                                            <div className="space-y-1">
+                                                                <CurrencyInput value={editForm.harga_jual_cst} onChange={(v) => setEditForm({ ...editForm, harga_jual_cst: v })} className="w-28 p-1.5 border border-indigo-300 rounded text-xs font-mono font-bold text-indigo-700" />
+                                                                <p className={`text-[10px] font-bold ${editForm.harga_jual_cst - editForm.modal_cst >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                                                                    Margin: {formatIDR(editForm.harga_jual_cst - editForm.modal_cst)}
+                                                                </p>
+                                                            </div>
                                                         ) : (
                                                             <span className="font-bold text-slate-800 font-mono">{formatIDR(harga?.harga_jual_cst || 0)}</span>
                                                         )}
@@ -234,14 +240,19 @@ export default function MasterDataPage() {
                                                     {/* KOLOM MRC */}
                                                     <td className="px-4 py-4">
                                                         {isEditing ? (
-                                                            <input type="number" value={editForm.modal_mrc} onChange={e => setEditForm({ ...editForm, modal_mrc: Number(e.target.value) })} className="w-24 p-1.5 border rounded text-xs font-mono" />
+                                                            <CurrencyInput value={editForm.modal_mrc} onChange={(v) => setEditForm({ ...editForm, modal_mrc: v })} className="w-28 p-1.5 border rounded text-xs font-mono" />
                                                         ) : (
                                                             <span className="text-slate-500 font-mono">{formatIDR(harga?.modal_mrc || 0)}</span>
                                                         )}
                                                     </td>
                                                     <td className="px-4 py-4">
                                                         {isEditing ? (
-                                                            <input type="number" value={editForm.harga_jual_mrc} onChange={e => setEditForm({ ...editForm, harga_jual_mrc: Number(e.target.value) })} className="w-24 p-1.5 border border-emerald-300 rounded text-xs font-mono font-bold text-emerald-700" />
+                                                            <div className="space-y-1">
+                                                                <CurrencyInput value={editForm.harga_jual_mrc} onChange={(v) => setEditForm({ ...editForm, harga_jual_mrc: v })} className="w-28 p-1.5 border border-emerald-300 rounded text-xs font-mono font-bold text-emerald-700" />
+                                                                <p className={`text-[10px] font-bold ${editForm.harga_jual_mrc - editForm.modal_mrc >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                                                                    Margin: {formatIDR(editForm.harga_jual_mrc - editForm.modal_mrc)}/bln
+                                                                </p>
+                                                            </div>
                                                         ) : (
                                                             <span className="font-bold text-emerald-600 font-mono">{formatIDR(harga?.harga_jual_mrc || 0)}</span>
                                                         )}
