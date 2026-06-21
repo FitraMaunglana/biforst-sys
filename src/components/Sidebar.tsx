@@ -4,7 +4,7 @@ import { useRouter, usePathname } from 'next/navigation';
 import { supabase } from '../lib/supabaseClient';
 import {
     Briefcase, DollarSign, FileText, CheckCircle2, Database,
-    Receipt, LogOut, ChevronLeft, ChevronRight, Radio, Menu, X
+    Receipt, LogOut, ChevronLeft, ChevronRight, Radio, Menu, X, History
 } from 'lucide-react';
 
 const ADMIN_EMAIL = 'biforsttechnologysolution@gmail.com';
@@ -24,6 +24,7 @@ const NAV_ITEMS: NavItem[] = [
     { label: 'BAST Lapangan', href: '/bast', icon: CheckCircle2, accent: 'emerald', adminOnly: true },
     { label: 'Pajak (PPN)', href: '/tax', icon: Receipt, accent: 'violet', adminOnly: true },
     { label: 'Master Data', href: '/master-data', icon: Database, accent: 'amber', adminOnly: true },
+    { label: 'Audit Log', href: '/audit-log', icon: History, accent: 'rose', adminOnly: true },
 ];
 
 const ACCENT_CLASSES: Record<string, { text: string; border: string; bgSoft: string }> = {
@@ -31,6 +32,7 @@ const ACCENT_CLASSES: Record<string, { text: string; border: string; bgSoft: str
     emerald: { text: 'text-emerald-400', border: 'border-emerald-400', bgSoft: 'bg-emerald-500/10' },
     violet: { text: 'text-violet-400', border: 'border-violet-400', bgSoft: 'bg-violet-500/10' },
     amber: { text: 'text-amber-400', border: 'border-amber-400', bgSoft: 'bg-amber-500/10' },
+    rose: { text: 'text-rose-400', border: 'border-rose-400', bgSoft: 'bg-rose-500/10' },
 };
 
 export default function Sidebar() {
