@@ -12,7 +12,7 @@ import autoTable from 'jspdf-autotable';
 import {
   Layers, TrendingUp, MapPin, Users, Database, Lock, RefreshCcw, BarChart3,
   DollarSign, Briefcase, CheckCircle2, Map, Clock, User, FileText, ArrowUpRight,
-  ArrowDownLeft, Wallet, Download, Eye, X, ShieldAlert, ListTodo
+  ArrowDownLeft, Wallet, Download, Eye, X, ShieldAlert, ListTodo, Paperclip
 } from 'lucide-react';
 
 interface TitikData {
@@ -145,12 +145,23 @@ function DashboardContent() {
     }
   };
 
+  const handleViewAttachment = async (path: string) => {
+    const { data, error } = await supabase.storage
+      .from('transaction-attachments')
+      .createSignedUrl(path, 60); // link berlaku 60 detik, cukup untuk dibuka sekali
+    if (error || !data) {
+      alert('Gagal membuka lampiran: ' + (error?.message || 'tidak ditemukan.'));
+      return;
+    }
+    window.open(data.signedUrl, '_blank');
+  };
+
   const fetchKasData = async () => {
     try {
       const { data: txData, error: txErr } = await supabase
         .from('transactions')
         .select(`
-          id, date, description, reference_code, created_at,
+          id, date, description, reference_code, created_at, attachment_url,
           journal_entries ( account_id, debit, credit )
         `)
         .order('date', { ascending: false })
@@ -594,7 +605,17 @@ function DashboardContent() {
                                 <div className="font-semibold text-slate-800 flex items-center gap-1.5">{tx.type === 'Masuk' ? <ArrowDownLeft className="w-3 h-3 text-emerald-500" /> : <ArrowUpRight className="w-3 h-3 text-rose-500" />}{formatDateIndo(tx.date)}</div>
                                 <div className="text-[10px] text-slate-400 font-mono mt-0.5">{tx.reference_code}</div>
                               </td>
-                              <td className="px-4 py-3 align-top text-slate-600 leading-relaxed max-w-[200px]">{tx.description}</td>
+                              <td className="px-4 py-3 align-top text-slate-600 leading-relaxed max-w-[200px]">
+                                {tx.description}
+                                {tx.attachment_url && (
+                                  <button
+                                    onClick={() => handleViewAttachment(tx.attachment_url)}
+                                    className="flex items-center gap-1 text-[10px] font-bold text-indigo-600 hover:text-indigo-800 mt-1"
+                                  >
+                                    <Paperclip size={10} /> Lihat Bukti
+                                  </button>
+                                )}
+                              </td>
                               <td className="px-4 py-3 align-top text-right"><span className={`font-bold font-mono px-2.5 py-1 rounded bg-slate-50 border ${tx.type === 'Masuk' ? 'text-emerald-600 border-emerald-100' : 'text-rose-600 border-rose-100'}`}>{tx.type === 'Masuk' ? '+' : '-'} {formatIDR(tx.amount)}</span></td>
                             </tr>
                           ))

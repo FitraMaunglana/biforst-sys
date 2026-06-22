@@ -10,6 +10,7 @@ import {
     CheckCircle,
     Info,
     X,
+    Paperclip,
     ListOrdered,
     PlusCircle,
     Clock,
@@ -50,6 +51,7 @@ const ACCOUNTS_DB: Account[] = [
     { id: 'acc-exp-503', code: '503', name: 'Operasional: Atk & Perlengkapan', type: 'Expense' },
     { id: 'acc-exp-504', code: '504', name: 'Operasional: Sewa Ruangan', type: 'Expense' },
     { id: 'acc-exp-505', code: '505', name: 'Operasional: Gaji Karyawan', type: 'Expense' },
+    { id: 'acc-exp-506', code: '506', name: 'Operasional: Internet & Domain', type: 'Expense' },
     { id: 'acc-asset-121', code: '121', name: 'Aset: Peralatan & Inventaris', type: 'Asset' },
 
     // Revenue & Equity (Kas Masuk Categories)
@@ -69,6 +71,8 @@ export default function TransactionForm({ onSuccess }: TransactionFormProps) {
     const [description, setDescription] = useState<string>('');
     const [amountInput, setAmountInput] = useState<string>('');
     const [categoryAccountId, setCategoryAccountId] = useState<string>('');
+    const [attachmentFile, setAttachmentFile] = useState<File | null>(null);
+    const [isUploadingFile, setIsUploadingFile] = useState(false);
 
     // Status states
     const [isSubmitting, setIsSubmitting] = useState(false);
@@ -205,6 +209,31 @@ export default function TransactionForm({ onSuccess }: TransactionFormProps) {
 
             if (txError) throw txError;
 
+            // 1b. Upload lampiran bukti (opsional) ke Supabase Storage,
+            // lalu simpan path-nya ke kolom attachment_url di transaksi ini.
+            if (attachmentFile) {
+                setIsUploadingFile(true);
+                const fileExt = attachmentFile.name.split('.').pop();
+                const filePath = `${txData.id}.${fileExt}`;
+
+                const { error: uploadError } = await supabase.storage
+                    .from('transaction-attachments')
+                    .upload(filePath, attachmentFile, { upsert: true });
+
+                if (uploadError) {
+                    // Lampiran gagal upload TIDAK membatalkan transaksi yang sudah
+                    // tersimpan -- cukup beri tahu, supaya data keuangan tidak hilang
+                    // hanya karena masalah upload file.
+                    setErrorMessage('Transaksi tersimpan, tapi gagal upload lampiran: ' + uploadError.message);
+                } else {
+                    await supabase
+                        .from('transactions')
+                        .update({ attachment_url: filePath })
+                        .eq('id', txData.id);
+                }
+                setIsUploadingFile(false);
+            }
+
             // 2. Eksekusi Insert penyeimbang ke tabel `journal_entries` di Supabase
             const entriesToInsert = [
                 {
@@ -247,6 +276,7 @@ export default function TransactionForm({ onSuccess }: TransactionFormProps) {
             setDescription('');
             setAmountInput('');
             setCategoryAccountId('');
+            setAttachmentFile(null);
 
             if (onSuccess) {
                 onSuccess({ transaction: newTransaction, entries: journalEntries });
@@ -437,6 +467,29 @@ export default function TransactionForm({ onSuccess }: TransactionFormProps) {
                                 </div>
                             </div>
 
+                            {/* Lampiran Bukti (Opsional) */}
+                            <div className="space-y-2">
+                                <label htmlFor="tx-attachment" className="block text-sm font-semibold text-slate-700">
+                                    Lampiran Bukti <span className="text-slate-400 font-normal">(opsional)</span>
+                                </label>
+                                <label
+                                    htmlFor="tx-attachment"
+                                    className="flex items-center gap-3 px-4 py-3 rounded-xl border border-dashed border-slate-300 hover:border-slate-400 cursor-pointer transition bg-slate-50/50"
+                                >
+                                    <Paperclip className="w-5 h-5 text-slate-400 shrink-0" />
+                                    <span className="text-sm text-slate-500 truncate">
+                                        {attachmentFile ? attachmentFile.name : 'Unggah invoice/struk (PDF, JPG, PNG)'}
+                                    </span>
+                                    <input
+                                        id="tx-attachment"
+                                        type="file"
+                                        accept=".pdf,.jpg,.jpeg,.png"
+                                        className="hidden"
+                                        onChange={(e) => setAttachmentFile(e.target.files?.[0] || null)}
+                                    />
+                                </label>
+                            </div>
+
                         </div>
 
                         {/* 3. Submit Action Block */}
@@ -451,15 +504,15 @@ export default function TransactionForm({ onSuccess }: TransactionFormProps) {
                             <button
                                 type="submit"
                                 id="submit-transaction-btn"
-                                disabled={isSubmitting}
-                                className={`w-full sm:w-auto px-8 py-3.5 rounded-xl font-bold text-white transition-all cursor-pointer ${isSubmitting
+                                disabled={isSubmitting || isUploadingFile}
+                                className={`w-full sm:w-auto px-8 py-3.5 rounded-xl font-bold text-white transition-all cursor-pointer ${(isSubmitting || isUploadingFile)
                                     ? 'bg-slate-400 cursor-not-allowed'
                                     : transactionType === 'kas_masuk'
                                         ? 'bg-emerald-600 hover:bg-emerald-700 shadow-md shadow-emerald-600/10 active:scale-[0.98]'
                                         : 'bg-slate-900 hover:bg-slate-800 shadow-md active:scale-[0.98]'
                                     }`}
                             >
-                                {isSubmitting ? 'Menyimpan di Supabase...' : 'Simpan Transaksi'}
+                                {isUploadingFile ? 'Mengunggah Lampiran...' : isSubmitting ? 'Menyimpan di Supabase...' : 'Simpan Transaksi'}
                             </button>
                         </div>
 
