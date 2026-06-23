@@ -12,7 +12,7 @@ import autoTable from 'jspdf-autotable';
 import {
   Layers, TrendingUp, MapPin, Users, Database, Lock, RefreshCcw, BarChart3,
   DollarSign, Briefcase, CheckCircle2, Map, Clock, User, FileText, ArrowUpRight,
-  ArrowDownLeft, Wallet, Download, Eye, X, ShieldAlert, ListTodo, Paperclip
+  ArrowDownLeft, Wallet, Download, Eye, X, ShieldAlert, ListTodo, Paperclip, Pencil
 } from 'lucide-react';
 
 interface TitikData {
@@ -50,6 +50,9 @@ function DashboardContent() {
   const [userRole, setUserRole] = useState<'admin' | 'staff'>('staff');
   const [currentUser, setCurrentUser] = useState('');
   const [checklistTitik, setChecklistTitik] = useState<{ id: string; label: string } | null>(null);
+  const [editingTx, setEditingTx] = useState<any | null>(null);
+  const [editTxForm, setEditTxForm] = useState({ date: '', description: '', amount: 0 });
+  const [isSavingTx, setIsSavingTx] = useState(false);
 
   // Sinkronkan tab aktif dengan query param ?tab=kas di URL,
   // supaya sidebar bisa langsung mengarahkan ke tab tertentu.
@@ -154,6 +157,32 @@ function DashboardContent() {
       return;
     }
     window.open(data.signedUrl, '_blank');
+  };
+
+  const handleOpenEditTx = (tx: any) => {
+    setEditingTx(tx);
+    setEditTxForm({ date: tx.date, description: tx.description, amount: tx.amount });
+  };
+
+  const handleSaveEditTx = async () => {
+    if (!editingTx) return;
+    setIsSavingTx(true);
+    try {
+      const { error } = await supabase.rpc('edit_transaction_safe', {
+        p_transaction_id: editingTx.id,
+        p_new_date: editTxForm.date,
+        p_new_description: editTxForm.description,
+        p_new_amount: editTxForm.amount,
+      });
+      if (error) throw error;
+      alert('Transaksi berhasil diperbarui. Saldo kas dan laporan terkait sudah disesuaikan.');
+      setEditingTx(null);
+      fetchKasData();
+    } catch (err: any) {
+      alert('Gagal mengedit transaksi: ' + err.message);
+    } finally {
+      setIsSavingTx(false);
+    }
   };
 
   const fetchKasData = async () => {
@@ -593,11 +622,11 @@ function DashboardContent() {
                   <div className="overflow-x-auto max-h-[500px] overflow-y-auto">
                     <table className="w-full text-left text-xs">
                       <thead className="bg-slate-50 text-slate-500 font-bold uppercase tracking-wider sticky top-0">
-                        <tr><th className="px-4 py-3">Tanggal & Ref</th><th className="px-4 py-3">Keterangan Transaksi</th><th className="px-4 py-3 text-right">Nominal (Rp)</th></tr>
+                        <tr><th className="px-4 py-3">Tanggal & Ref</th><th className="px-4 py-3">Keterangan Transaksi</th><th className="px-4 py-3 text-right">Nominal (Rp)</th><th className="px-4 py-3"></th></tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100">
                         {transactions.length === 0 ? (
-                          <tr><td colSpan={3} className="px-4 py-8 text-center text-slate-400">Belum ada riwayat transaksi.</td></tr>
+                          <tr><td colSpan={4} className="px-4 py-8 text-center text-slate-400">Belum ada riwayat transaksi.</td></tr>
                         ) : (
                           transactions.map(tx => (
                             <tr key={tx.id} className="hover:bg-slate-50 transition group">
@@ -617,6 +646,15 @@ function DashboardContent() {
                                 )}
                               </td>
                               <td className="px-4 py-3 align-top text-right"><span className={`font-bold font-mono px-2.5 py-1 rounded bg-slate-50 border ${tx.type === 'Masuk' ? 'text-emerald-600 border-emerald-100' : 'text-rose-600 border-rose-100'}`}>{tx.type === 'Masuk' ? '+' : '-'} {formatIDR(tx.amount)}</span></td>
+                              <td className="px-4 py-3 align-top">
+                                <button
+                                  onClick={() => handleOpenEditTx(tx)}
+                                  className="opacity-0 group-hover:opacity-100 text-slate-400 hover:text-indigo-600 transition"
+                                  title="Edit transaksi"
+                                >
+                                  <Pencil size={13} />
+                                </button>
+                              </td>
                             </tr>
                           ))
                         )}
@@ -653,6 +691,68 @@ function DashboardContent() {
           titikLabel={checklistTitik.label}
           onClose={() => setChecklistTitik(null)}
         />
+      )}
+
+      {editingTx && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden">
+            <div className="bg-slate-900 p-4 flex items-center justify-between text-white">
+              <h3 className="font-bold flex items-center gap-2">
+                <Pencil size={16} className="text-amber-400" /> Edit Transaksi
+              </h3>
+              <button onClick={() => setEditingTx(null)} className="text-slate-400 hover:text-white">
+                <X size={18} />
+              </button>
+            </div>
+            <div className="p-5 space-y-4">
+              <div className="flex items-start gap-2.5 bg-amber-50 border border-amber-200 rounded-xl p-3 text-amber-800 text-xs">
+                <ShieldAlert size={16} className="shrink-0 mt-0.5" />
+                <p>
+                  Mengubah transaksi yang sudah tersimpan akan memengaruhi saldo kas historis dan laporan yang
+                  sudah pernah dilihat sebelumnya. Pastikan koreksi ini benar — perubahan akan tercatat permanen di Audit Log.
+                </p>
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-slate-500 uppercase">Tanggal</label>
+                <input
+                  type="date"
+                  value={editTxForm.date}
+                  onChange={(e) => setEditTxForm({ ...editTxForm, date: e.target.value })}
+                  className="w-full mt-1 border border-slate-300 rounded-lg px-3 py-2 text-sm"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-bold text-slate-500 uppercase">Keterangan</label>
+                <input
+                  type="text"
+                  value={editTxForm.description}
+                  onChange={(e) => setEditTxForm({ ...editTxForm, description: e.target.value })}
+                  className="w-full mt-1 border border-slate-300 rounded-lg px-3 py-2 text-sm"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-bold text-slate-500 uppercase">Nominal</label>
+                <input
+                  type="number"
+                  value={editTxForm.amount}
+                  onChange={(e) => setEditTxForm({ ...editTxForm, amount: Number(e.target.value) })}
+                  className="w-full mt-1 border border-amber-300 rounded-lg px-3 py-2 text-sm font-mono font-bold"
+                  min="1"
+                />
+                <p className="text-[10px] text-slate-400 mt-1">Jurnal debit/kredit akan otomatis disesuaikan ke nominal baru ini.</p>
+              </div>
+
+              <button
+                onClick={handleSaveEditTx}
+                disabled={isSavingTx}
+                className="w-full bg-amber-600 hover:bg-amber-500 text-white font-bold py-2.5 rounded-xl transition disabled:opacity-50"
+              >
+                {isSavingTx ? 'Menyimpan...' : 'Simpan Koreksi'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
