@@ -97,8 +97,8 @@ export default function TaskCard({ task, showAssignee = true, isExpanded, onTogg
                         key={s}
                         onClick={() => onStatusChange(task.id, s)}
                         className={`flex-1 flex items-center justify-center gap-1 text-[11px] font-bold py-1.5 rounded-lg transition ${task.status === s
-                                ? s === 'Selesai' ? 'bg-emerald-500 text-white' : s === 'Sedang Dikerjakan' ? 'bg-amber-500 text-white' : 'bg-slate-400 text-white'
-                                : 'bg-slate-50 text-slate-400 hover:bg-slate-100'
+                            ? s === 'Selesai' ? 'bg-emerald-500 text-white' : s === 'Sedang Dikerjakan' ? 'bg-amber-500 text-white' : 'bg-slate-400 text-white'
+                            : 'bg-slate-50 text-slate-400 hover:bg-slate-100'
                             }`}
                     >
                         {s === 'Selesai' ? <CheckCircle2 size={12} /> : s === 'Sedang Dikerjakan' ? <Clock size={12} /> : <Circle size={12} />}
@@ -116,7 +116,7 @@ export default function TaskCard({ task, showAssignee = true, isExpanded, onTogg
                 {isExpanded ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
             </button>
 
-            {isExpanded && <TaskTimeline taskId={task.id} />}
+            {isExpanded && <TaskTimeline taskId={task.id} assignedTo={task.assigned_to} />}
         </div>
     );
 }

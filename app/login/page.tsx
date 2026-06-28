@@ -1,24 +1,32 @@
 "use client";
-import React, { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import React, { useState, useEffect, Suspense } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { supabase } from '../../src/lib/supabaseClient';
 import { ArrowRight, ShieldCheck, Eye, EyeOff, KeyRound } from 'lucide-react';
 
-export default function LoginPage() {
+function LoginContent() {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [showPassword, setShowPassword] = useState(false);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const router = useRouter();
+    const searchParams = useSearchParams();
 
     // Mode khusus saat user datang dari link "reset password" di email --
-    // Supabase memicu event PASSWORD_RECOVERY, bukan langsung login biasa.
+    // Supabase memicu event PASSWORD_RECOVERY, dan dashboard (yang menerima
+    // redirect duluan) meneruskan ke sini dengan flag ?recovery=true.
     const [isRecoveryMode, setIsRecoveryMode] = useState(false);
     const [newPassword, setNewPassword] = useState('');
     const [confirmPassword, setConfirmPassword] = useState('');
     const [isSettingPassword, setIsSettingPassword] = useState(false);
     const [recoverySuccess, setRecoverySuccess] = useState(false);
+
+    useEffect(() => {
+        if (searchParams.get('recovery') === 'true') {
+            setIsRecoveryMode(true);
+        }
+    }, [searchParams]);
 
     useEffect(() => {
         const { data: listener } = supabase.auth.onAuthStateChange((event) => {
@@ -199,5 +207,17 @@ export default function LoginPage() {
                 </div>
             </div>
         </div>
+    );
+}
+
+export default function LoginPage() {
+    return (
+        <Suspense fallback={
+            <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+                <div className="text-slate-400 text-sm">Memuat...</div>
+            </div>
+        }>
+            <LoginContent />
+        </Suspense>
     );
 }

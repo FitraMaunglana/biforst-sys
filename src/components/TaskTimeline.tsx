@@ -25,6 +25,7 @@ interface AttachmentRow {
 
 interface TaskTimelineProps {
     taskId: string;
+    assignedTo: string;
 }
 
 const EMAIL_TO_NAME: Record<string, string> = {
@@ -41,7 +42,31 @@ function getFileIcon(fileType: string | null) {
     return FileIcon;
 }
 
-export default function TaskTimeline({ taskId }: TaskTimelineProps) {
+// Deteksi URL di dalam teks catatan dan ubah jadi link yang bisa diklik,
+// tanpa perlu sintaks markdown khusus -- cukup tulis link biasa.
+// PENTING: regex baru dibuat setiap kali dipanggil (bukan 1 instance global)
+// supaya tidak terkena bug "lastIndex" dari flag /g yang dipakai berulang.
+function renderNoteWithLinks(note: string) {
+    const parts = note.split(/(https?:\/\/[^\s]+)/g);
+    return parts.map((part, i) => {
+        if (/^https?:\/\/[^\s]+$/.test(part)) {
+            return (
+                <a
+                    key={i}
+                    href={part}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-indigo-600 hover:text-indigo-800 underline break-all"
+                >
+                    {part}
+                </a>
+            );
+        }
+        return <span key={i}>{part}</span>;
+    });
+}
+
+export default function TaskTimeline({ taskId, assignedTo }: TaskTimelineProps) {
     const [updates, setUpdates] = useState<TaskUpdate[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [noteText, setNoteText] = useState('');
@@ -50,6 +75,8 @@ export default function TaskTimeline({ taskId }: TaskTimelineProps) {
     const [myEmail, setMyEmail] = useState('');
     const fileInputRef = useRef<HTMLInputElement>(null);
     const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+    const isOwner = EMAIL_TO_NAME[myEmail] === assignedTo;
 
     useEffect(() => {
         supabase.auth.getSession().then(({ data }) => {
@@ -120,15 +147,31 @@ export default function TaskTimeline({ taskId }: TaskTimelineProps) {
                 .single();
             if (updateErr) throw updateErr;
 
+            const failedFiles: string[] = [];
+
             for (const file of pendingFiles) {
                 const safeName = file.name.replace(/[^a-zA-Z0-9.\-_]/g, '_');
                 const filePath = `${taskId}/${updateRow.id}/${Date.now()}-${safeName}`;
 
-                const { error: uploadErr } = await supabase.storage
-                    .from('task-attachments')
-                    .upload(filePath, file);
-                if (uploadErr) {
-                    alert(`Catatan tersimpan, tapi gagal upload "${file.name}": ${uploadErr.message}`);
+                // Coba upload sampai 3x -- koneksi mobile kadang putus sesaat,
+                // jangan langsung gagal di percobaan pertama.
+                let uploadSucceeded = false;
+                let lastError: any = null;
+                for (let attempt = 1; attempt <= 3; attempt++) {
+                    const { error: uploadErr } = await supabase.storage
+                        .from('task-attachments')
+                        .upload(filePath, file);
+                    if (!uploadErr) {
+                        uploadSucceeded = true;
+                        break;
+                    }
+                    lastError = uploadErr;
+                    // Tunggu sebentar sebelum coba lagi (1.5 detik per percobaan)
+                    await new Promise((resolve) => setTimeout(resolve, 1500));
+                }
+
+                if (!uploadSucceeded) {
+                    failedFiles.push(`${file.name} (${lastError?.message || 'koneksi gagal'})`);
                     continue;
                 }
 
@@ -143,6 +186,10 @@ export default function TaskTimeline({ taskId }: TaskTimelineProps) {
             setNoteText('');
             setPendingFiles([]);
             loadUpdates();
+
+            if (failedFiles.length > 0) {
+                alert(`Catatan tersimpan, tapi ${failedFiles.length} file gagal diupload setelah 3x percobaan:\n${failedFiles.join('\n')}\n\nCoba lampirkan ulang file ini di update baru.`);
+            }
         } catch (err: any) {
             alert('Gagal menyimpan progres: ' + err.message);
         } finally {
@@ -184,13 +231,15 @@ export default function TaskTimeline({ taskId }: TaskTimelineProps) {
                         updates.map((u) => (
                             <div key={u.id} className="bg-slate-50 rounded-xl p-3 text-xs group">
                                 <div className="flex items-start justify-between gap-2">
-                                    <p className="text-slate-700 whitespace-pre-wrap flex-1">{u.note}</p>
-                                    <button
-                                        onClick={() => handleDeleteUpdate(u.id)}
-                                        className="opacity-0 group-hover:opacity-100 text-slate-300 hover:text-rose-500 transition shrink-0"
-                                    >
-                                        <Trash2 size={12} />
-                                    </button>
+                                    <p className="text-slate-700 whitespace-pre-wrap flex-1">{renderNoteWithLinks(u.note)}</p>
+                                    {isOwner && (
+                                        <button
+                                            onClick={() => handleDeleteUpdate(u.id)}
+                                            className="opacity-0 group-hover:opacity-100 text-slate-300 hover:text-rose-500 transition shrink-0"
+                                        >
+                                            <Trash2 size={12} />
+                                        </button>
+                                    )}
                                 </div>
 
                                 {u.task_update_attachments && u.task_update_attachments.length > 0 && (
@@ -219,55 +268,61 @@ export default function TaskTimeline({ taskId }: TaskTimelineProps) {
                 </div>
             )}
 
-            <form onSubmit={handleSubmit} className="space-y-2">
-                <textarea
-                    ref={textareaRef}
-                    value={noteText}
-                    onChange={(e) => setNoteText(e.target.value)}
-                    onPaste={handlePaste}
-                    placeholder="Tulis update progres... (bisa paste screenshot langsung di sini, atau tempel hasil terminal)"
-                    className="w-full text-xs border border-slate-200 rounded-xl px-3 py-2 resize-none focus:ring-2 focus:ring-teal-200 focus:border-teal-300"
-                    rows={3}
-                />
+            {isOwner ? (
+                <form onSubmit={handleSubmit} className="space-y-2">
+                    <textarea
+                        ref={textareaRef}
+                        value={noteText}
+                        onChange={(e) => setNoteText(e.target.value)}
+                        onPaste={handlePaste}
+                        placeholder="Tulis update progres... (paste screenshot, tempel hasil terminal, atau sertakan link/tautan langsung di sini)"
+                        className="w-full text-xs border border-slate-200 rounded-xl px-3 py-2 resize-none focus:ring-2 focus:ring-teal-200 focus:border-teal-300"
+                        rows={3}
+                    />
 
-                {pendingFiles.length > 0 && (
-                    <div className="flex flex-wrap gap-1.5">
-                        {pendingFiles.map((f, i) => (
-                            <div key={i} className="flex items-center gap-1 bg-teal-50 border border-teal-200 rounded-lg px-2 py-1 text-[10px] font-medium text-teal-700">
-                                <Paperclip size={10} /> {f.name}
-                                <button type="button" onClick={() => removePendingFile(i)} className="text-teal-400 hover:text-teal-700">
-                                    <X size={10} />
-                                </button>
-                            </div>
-                        ))}
+                    {pendingFiles.length > 0 && (
+                        <div className="flex flex-wrap gap-1.5">
+                            {pendingFiles.map((f, i) => (
+                                <div key={i} className="flex items-center gap-1 bg-teal-50 border border-teal-200 rounded-lg px-2 py-1 text-[10px] font-medium text-teal-700">
+                                    <Paperclip size={10} /> {f.name}
+                                    <button type="button" onClick={() => removePendingFile(i)} className="text-teal-400 hover:text-teal-700">
+                                        <X size={10} />
+                                    </button>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+
+                    <div className="flex items-center justify-between">
+                        <label className="flex items-center gap-1.5 text-[11px] font-bold text-slate-500 hover:text-slate-700 cursor-pointer">
+                            <Paperclip size={13} /> Lampirkan file
+                            <input
+                                ref={fileInputRef}
+                                type="file"
+                                multiple
+                                accept=".pdf,.jpg,.jpeg,.png,.txt,.doc,.docx,.xls,.xlsx,.csv"
+                                className="hidden"
+                                onChange={handleFileSelect}
+                            />
+                        </label>
+                        <button
+                            type="submit"
+                            disabled={isSubmitting}
+                            className="flex items-center gap-1.5 bg-teal-600 hover:bg-teal-500 text-white text-xs font-bold px-4 py-1.5 rounded-lg transition disabled:opacity-50"
+                        >
+                            {isSubmitting ? <Loader2 size={12} className="animate-spin" /> : <Send size={12} />}
+                            {isSubmitting ? 'Menyimpan...' : 'Kirim'}
+                        </button>
                     </div>
-                )}
-
-                <div className="flex items-center justify-between">
-                    <label className="flex items-center gap-1.5 text-[11px] font-bold text-slate-500 hover:text-slate-700 cursor-pointer">
-                        <Paperclip size={13} /> Lampirkan file
-                        <input
-                            ref={fileInputRef}
-                            type="file"
-                            multiple
-                            accept=".pdf,.jpg,.jpeg,.png,.txt,.doc,.docx,.xls,.xlsx,.csv"
-                            className="hidden"
-                            onChange={handleFileSelect}
-                        />
-                    </label>
-                    <button
-                        type="submit"
-                        disabled={isSubmitting}
-                        className="flex items-center gap-1.5 bg-teal-600 hover:bg-teal-500 text-white text-xs font-bold px-4 py-1.5 rounded-lg transition disabled:opacity-50"
-                    >
-                        {isSubmitting ? <Loader2 size={12} className="animate-spin" /> : <Send size={12} />}
-                        {isSubmitting ? 'Menyimpan...' : 'Kirim'}
-                    </button>
-                </div>
-                <p className="text-[10px] text-slate-400 flex items-center gap-1">
-                    <Clipboard size={10} /> Tip: screenshot bisa langsung di-paste (Ctrl+V) di kotak catatan.
+                    <p className="text-[10px] text-slate-400 flex items-center gap-1">
+                        <Clipboard size={10} /> Tip: screenshot bisa langsung di-paste (Ctrl+V) di kotak catatan.
+                    </p>
+                </form>
+            ) : (
+                <p className="text-[11px] text-slate-400 text-center bg-slate-50 rounded-xl py-3">
+                    Hanya <span className="font-bold">{assignedTo}</span> yang bisa menambahkan progres untuk tugas ini.
                 </p>
-            </form>
+            )}
         </div>
     );
 }

@@ -72,6 +72,21 @@ function DashboardContent() {
   const [kasBalance, setKasBalance] = useState({ masuk: 0, keluar: 0, saldo: 0 });
   const [previewReportPdf, setPreviewReportPdf] = useState<{ url: string; doc: any; fileName: string } | null>(null);
 
+  // Tangkap event recovery password SEBELUM dashboard sempat me-render
+  // data apa pun -- karena Supabase mengarahkan link recovery ke halaman
+  // ini (root), bukan ke /login, dan event SIGNED_IN bisa muncul lebih
+  // dulu daripada PASSWORD_RECOVERY.
+  useEffect(() => {
+    const { data: listener } = supabase.auth.onAuthStateChange((event) => {
+      if (event === 'PASSWORD_RECOVERY') {
+        router.push('/login?recovery=true');
+      }
+    });
+    return () => {
+      listener.subscription.unsubscribe();
+    };
+  }, [router]);
+
   useEffect(() => {
     const initDashboard = async () => {
       const { data: { session } } = await supabase.auth.getSession();
