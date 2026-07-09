@@ -171,6 +171,30 @@ export interface AuditRow {
   changed_at: string;
 }
 
+// ---------- Reimbursement ----------
+
+export interface ReimbursementAttachment {
+  id: string;
+  reimbursement_id: string;
+  file_url: string;
+  file_name: string;
+  uploaded_at: string;
+}
+
+export interface Reimbursement {
+  id: string;
+  user_email: string; // the founder who requested
+  title: string;
+  description: string | null;
+  amount: number;
+  status: 'Pending' | 'Approved' | 'Rejected';
+  reject_reason: string | null;
+  created_at: string;
+  approved_at: string | null;
+  approved_by: string | null; // admin who approved
+  reimbursement_attachments?: ReimbursementAttachment[];
+}
+
 // ---------- Aggregated / Computed Types ----------
 
 export interface KasBalance {

@@ -4,7 +4,7 @@ import { useRouter, usePathname } from 'next/navigation';
 import { supabase } from '../lib/supabaseClient';
 import {
     Briefcase, DollarSign, FileText, CheckCircle2, Database,
-    Receipt, LogOut, ChevronLeft, ChevronRight, Radio, Menu, X, History, ListTodo
+    Receipt, LogOut, ChevronLeft, ChevronRight, Radio, Menu, X, History, ListTodo, HandCoins
 } from 'lucide-react';
 
 const ADMIN_EMAIL = 'biforsttechnologysolution@gmail.com';
@@ -25,6 +25,7 @@ const NAV_ITEMS: NavItem[] = [
     { label: 'BAST Lapangan', href: '/bast', icon: CheckCircle2, accent: 'emerald', adminOnly: true },
     { label: 'Pajak (PPN)', href: '/tax', icon: Receipt, accent: 'violet', adminOnly: true },
     { label: 'Master Data', href: '/master-data', icon: Database, accent: 'amber', adminOnly: true },
+    { label: 'Reimbursement', href: '/reimbursement', icon: HandCoins, accent: 'rose', adminOnly: false },
     { label: 'Audit Log', href: '/audit-log', icon: History, accent: 'rose', adminOnly: true },
 ];
 

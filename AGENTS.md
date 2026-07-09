@@ -45,10 +45,8 @@
 - Checklist Eksekusi 6 tahap per titik
 - Summary Keuangan per kabupaten (realtime)
 - Modul Tugas/Jobdesk (tasks + task_updates + lampiran)
-- Reimbursement (SQL sudah dibuat, UI belum selesai)
+- Modul Reimbursement (SQL, API, dan UI/UX Premium selesai 100%)
 - **Migrasi ke Clean Architecture (Selesai)**: Semua halaman telah dimodifikasi untuk menggunakan komponen UI yang konsisten (`AppLayout`, `PageHeader`, dll.) dan logika bisnis dipisahkan ke dalam `src/services/*.service.ts`. JANGAN tambahkan logika database langsung ke file page di `app/`.
 
 ## Fitur yang SEDANG dalam pengerjaan
-- Halaman `/reimbursement`: form pengajuan, riwayat, approve/tolak untuk admin
-  - SQL sudah jalan: tabel reimbursements, reimbursement_attachments, bucket storage, RPC approve/reject
-  - UI belum dibuat sama sekali
+- Tidak ada fitur yang sedang berjalan (selesai).
