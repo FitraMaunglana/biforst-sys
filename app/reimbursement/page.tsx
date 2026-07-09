@@ -241,6 +241,7 @@ export default function ReimbursementPage() {
                                                     )}
                                                 </td>
                                                 <td className="px-6 py-4 text-center">
+                                                    <div className="flex flex-col items-center gap-1.5">
                                                         <StatusBadge status={r.status} />
                                                         {r.status === 'rejected' && r.reject_reason && (
                                                             <p className="text-[11px] text-rose-500 max-w-[150px] truncate bg-rose-50 px-2 py-0.5 rounded-md border border-rose-100" title={r.reject_reason}>
