@@ -59,7 +59,7 @@ export async function createReimbursement(
       submitted_by: data.submitted_by,
       expense_date: data.expense_date,
       account_id: data.account_id,
-      status: 'pending'
+      status: 'Pending'
     })
     .select('id')
     .single();

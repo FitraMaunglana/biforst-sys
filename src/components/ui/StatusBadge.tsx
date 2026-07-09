@@ -20,9 +20,9 @@ const STATUS_COLORS: Record<string, { bg: string; text: string; border: string }
   'Belum Mulai': { bg: 'bg-slate-100', text: 'text-slate-600', border: 'border-slate-200' },
   
   // Reimbursement specific
-  pending: { bg: 'bg-amber-50', text: 'text-amber-600', border: 'border-amber-200' },
-  approved: { bg: 'bg-emerald-50', text: 'text-emerald-600', border: 'border-emerald-200' },
-  rejected: { bg: 'bg-rose-50', text: 'text-rose-600', border: 'border-rose-200' },
+  Pending: { bg: 'bg-amber-50', text: 'text-amber-600', border: 'border-amber-200' },
+  Approved: { bg: 'bg-emerald-50', text: 'text-emerald-600', border: 'border-emerald-200' },
+  Rejected: { bg: 'bg-rose-50', text: 'text-rose-600', border: 'border-rose-200' },
 };
 
 const VARIANT_COLORS: Record<string, { bg: string; text: string; border: string }> = {

@@ -117,11 +117,11 @@ export default function ReimbursementPage() {
     };
 
     const totalReimbursement = reimbursements.reduce((acc, curr) => acc + curr.amount, 0);
-    const pendingCount = reimbursements.filter(r => r.status === 'pending').length;
-    const approvedTotal = reimbursements.filter(r => r.status === 'approved').reduce((acc, curr) => acc + curr.amount, 0);
+    const pendingCount = reimbursements.filter(r => r.status === 'Pending').length;
+    const approvedTotal = reimbursements.filter(r => r.status === 'Approved').reduce((acc, curr) => acc + curr.amount, 0);
 
     const filteredReimbursements = reimbursements.filter(r => {
-        if (activeTab === 'pending') return r.status === 'pending';
+        if (activeTab === 'pending') return r.status === 'Pending';
         return true;
     });
 
@@ -243,7 +243,7 @@ export default function ReimbursementPage() {
                                                 <td className="px-6 py-4 text-center">
                                                     <div className="flex flex-col items-center gap-1.5">
                                                         <StatusBadge status={r.status} />
-                                                        {r.status === 'rejected' && r.reject_reason && (
+                                                        {r.status === 'Rejected' && r.reject_reason && (
                                                             <p className="text-[11px] text-rose-500 max-w-[150px] truncate bg-rose-50 px-2 py-0.5 rounded-md border border-rose-100" title={r.reject_reason}>
                                                                 {r.reject_reason}
                                                             </p>
@@ -252,7 +252,7 @@ export default function ReimbursementPage() {
                                                 </td>
                                                 {role === 'admin' && (
                                                     <td className="px-6 py-4 text-center">
-                                                        {r.status === 'pending' ? (
+                                                        {r.status === 'Pending' ? (
                                                             <div className="flex items-center justify-center gap-2">
                                                                 <button onClick={() => handleApprove(r.id)} className="flex items-center gap-1 px-3 py-1.5 bg-emerald-100 text-emerald-700 hover:bg-emerald-600 hover:text-white rounded-lg transition-colors font-bold text-xs" title="Setujui">
                                                                     <CheckCircle size={14} /> Setujui
