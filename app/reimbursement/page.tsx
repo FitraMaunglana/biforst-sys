@@ -7,6 +7,7 @@ import Modal from '../../src/components/ui/Modal';
 import StatusBadge from '../../src/components/ui/StatusBadge';
 import StatCard from '../../src/components/ui/StatCard';
 import TabToggle from '../../src/components/ui/TabToggle';
+import Toast, { ToastType } from '../../src/components/ui/Toast';
 import { useAuth } from '../../src/hooks/useAuth';
 import { fetchReimbursements, createReimbursement, approveReimbursement, rejectReimbursement, fetchExpenseAccounts } from '../../src/services/reimbursement.service';
 import type { Reimbursement, Account } from '../../src/types';
@@ -15,6 +16,12 @@ import { HandCoins, Plus, Paperclip, Loader2, CheckCircle, XCircle, Clock, Alert
 
 export default function ReimbursementPage() {
     const { role, session } = useAuth();
+    const [toast, setToast] = useState<{ message: string; type: ToastType } | null>(null);
+
+    const showToast = (message: string, type: ToastType = 'info') => {
+        setToast({ message, type });
+    };
+
     const [isLoading, setIsLoading] = useState(true);
     const [reimbursements, setReimbursements] = useState<Reimbursement[]>([]);
     const [activeTab, setActiveTab] = useState<'semua' | 'pending'>('semua');
@@ -46,7 +53,7 @@ export default function ReimbursementPage() {
             setAccounts(accs);
         } catch (error) {
             console.error('Failed to fetch reimbursements:', error);
-            alert('Gagal mengambil data reimbursement.');
+            showToast('Gagal mengambil data reimbursement.', 'error');
         } finally {
             setIsLoading(false);
         }
@@ -59,7 +66,7 @@ export default function ReimbursementPage() {
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!form.title || form.amount <= 0 || files.length === 0 || !form.expense_date || !form.account_id) {
-            alert('Judul, nominal valid, tanggal pengeluaran, kategori pengeluaran, dan minimal 1 lampiran wajib diisi.');
+            showToast('Judul, nominal valid, tanggal pengeluaran, kategori pengeluaran, dan minimal 1 lampiran wajib diisi.', 'error');
             return;
         }
 
@@ -69,14 +76,14 @@ export default function ReimbursementPage() {
                 { ...form, submitted_by: session?.email || '' },
                 files
             );
-            alert('Reimbursement berhasil diajukan.');
+            showToast('Reimbursement berhasil diajukan.', 'success');
             setShowForm(false);
             setForm({ title: '', description: '', amount: 0, expense_date: '', account_id: '' });
             setFiles([]);
             loadData();
         } catch (error: any) {
             console.error(error);
-            alert('Gagal mengajukan reimbursement: ' + error.message);
+            showToast('Gagal mengajukan reimbursement: ' + error.message, 'error');
         } finally {
             setIsSubmitting(false);
         }
@@ -86,31 +93,31 @@ export default function ReimbursementPage() {
         if (!confirm('Setujui pengajuan ini? Transaksi kas akan tercatat otomatis.')) return;
         try {
             await approveReimbursement(id);
-            alert('Reimbursement disetujui.');
+            showToast('Reimbursement disetujui.', 'success');
             loadData();
         } catch (error: any) {
             console.error(error);
-            alert('Gagal menyetujui: ' + error.message);
+            showToast('Gagal menyetujui: ' + error.message, 'error');
         }
     };
 
     const handleReject = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!rejectId || !rejectReason.trim()) {
-            alert('Alasan penolakan wajib diisi.');
+            showToast('Alasan penolakan wajib diisi.', 'error');
             return;
         }
         setIsRejecting(true);
         try {
             await rejectReimbursement(rejectId, rejectReason);
-            alert('Reimbursement ditolak.');
+            showToast('Reimbursement ditolak.', 'success');
             setShowRejectForm(false);
             setRejectId(null);
             setRejectReason('');
             loadData();
         } catch (error: any) {
             console.error(error);
-            alert('Gagal menolak: ' + error.message);
+            showToast('Gagal menolak: ' + error.message, 'error');
         } finally {
             setIsRejecting(false);
         }
@@ -420,6 +427,8 @@ export default function ReimbursementPage() {
                     </div>
                 </form>
             </Modal>
+            
+            {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
         </AppLayout>
     );
 }
