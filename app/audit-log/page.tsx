@@ -1,40 +1,12 @@
 "use client";
-import React, { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
-import { supabase } from '../../src/lib/supabaseClient';
-import Sidebar from '../../src/components/Sidebar';
-import {
-    History, Loader2, Plus, Pencil, Trash2, ChevronDown, ChevronUp, Filter
-} from 'lucide-react';
-
-const ADMIN_EMAIL = 'biforsttechnologysolution@gmail.com';
-
-const TABLE_LABELS: Record<string, string> = {
-    accounts: 'Akun Bookkeeping',
-    document_counters: 'Counter Dokumen',
-    execution_stages: 'Tahapan Eksekusi (Master)',
-    invoice_payments: 'Pembayaran Invoice',
-    invoices: 'Invoice',
-    journal_entries: 'Jurnal Entri',
-    kabupatens: 'Kabupaten',
-    projects: 'Proyek',
-    titik_execution_checklist: 'Checklist Eksekusi',
-    titik_harga: 'Harga Titik',
-    titik_lokasi: 'Titik Lokasi',
-    transactions: 'Transaksi Kas',
-    vendor_bills: 'Tagihan Vendor',
-};
-
-interface AuditRow {
-    id: number;
-    table_name: string;
-    record_id: string;
-    operation: 'INSERT' | 'UPDATE' | 'DELETE';
-    changed_by: string;
-    old_data: Record<string, any> | null;
-    new_data: Record<string, any> | null;
-    changed_at: string;
-}
+import React, { useState, useEffect, useCallback } from 'react';
+import AppLayout from '../../src/components/layout/AppLayout';
+import PageHeader from '../../src/components/ui/PageHeader';
+import EmptyState from '../../src/components/ui/EmptyState';
+import { fetchAuditLogs, getAuditDiff } from '../../src/services/audit.service';
+import type { AuditRow } from '../../src/types';
+import { TABLE_LABELS } from '../../src/utils/constants';
+import { History, Plus, Pencil, Trash2, ChevronDown, ChevronUp, Filter } from 'lucide-react';
 
 const OPERATION_STYLE: Record<string, { icon: React.ElementType; color: string; bg: string }> = {
     INSERT: { icon: Plus, color: 'text-emerald-600', bg: 'bg-emerald-50' },
@@ -42,25 +14,7 @@ const OPERATION_STYLE: Record<string, { icon: React.ElementType; color: string; 
     DELETE: { icon: Trash2, color: 'text-rose-600', bg: 'bg-rose-50' },
 };
 
-// Bandingkan old_data vs new_data, kembalikan hanya kolom yang benar-benar berubah.
-function getDiff(oldData: Record<string, any> | null, newData: Record<string, any> | null) {
-    if (!oldData || !newData) return [];
-    const keys = new Set([...Object.keys(oldData), ...Object.keys(newData)]);
-    const diffs: { field: string; from: any; to: any }[] = [];
-    keys.forEach((key) => {
-        if (key === 'last_updated_at' || key === 'created_at') return; // noise, tidak relevan
-        const a = oldData[key];
-        const b = newData[key];
-        if (JSON.stringify(a) !== JSON.stringify(b)) {
-            diffs.push({ field: key, from: a, to: b });
-        }
-    });
-    return diffs;
-}
-
 export default function AuditLogPage() {
-    const router = useRouter();
-    const [isCheckingAuth, setIsCheckingAuth] = useState(true);
     const [isLoading, setIsLoading] = useState(true);
     const [rows, setRows] = useState<AuditRow[]>([]);
     const [tableFilter, setTableFilter] = useState<string>('');
@@ -69,88 +23,39 @@ export default function AuditLogPage() {
     const [page, setPage] = useState(0);
     const PAGE_SIZE = 30;
 
-    useEffect(() => {
-        const checkAuth = async () => {
-            const { data: { session } } = await supabase.auth.getSession();
-            if (!session) {
-                router.push('/login');
-            } else if (session.user.email !== ADMIN_EMAIL) {
-                alert('AKSES DITOLAK: Halaman ini hanya untuk Administrator.');
-                router.push('/');
-            } else {
-                setIsCheckingAuth(false);
-            }
-        };
-        checkAuth();
-    }, [router]);
-
-    const loadLogs = async () => {
+    const loadLogs = useCallback(async () => {
         setIsLoading(true);
         try {
-            let query = supabase
-                .from('audit_log')
-                .select('*')
-                .order('changed_at', { ascending: false })
-                .range(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE - 1);
-
-            if (tableFilter) query = query.eq('table_name', tableFilter);
-            if (operationFilter) query = query.eq('operation', operationFilter);
-
-            const { data, error } = await query;
-            if (error) throw error;
-            setRows((data as AuditRow[]) || []);
-        } catch (err: any) {
+            const data = await fetchAuditLogs({ page, pageSize: PAGE_SIZE, tableFilter, operationFilter });
+            setRows(data);
+        } catch (err) {
             console.error(err);
         } finally {
             setIsLoading(false);
         }
-    };
+    }, [page, tableFilter, operationFilter]);
 
     useEffect(() => {
-        if (!isCheckingAuth) loadLogs();
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [isCheckingAuth, tableFilter, operationFilter, page]);
-
-    if (isCheckingAuth) {
-        return (
-            <div className="min-h-screen bg-slate-50 flex items-center justify-center">
-                <Loader2 className="animate-spin text-slate-400" size={32} />
-            </div>
-        );
-    }
+        loadLogs();
+    }, [loadLogs]);
 
     return (
-        <div className="min-h-screen bg-slate-50 text-slate-800 font-sans flex">
-            <Sidebar />
-            <div className="flex-1 min-w-0 p-6">
+        <AppLayout requireAdmin>
+            <div className="p-6">
                 <div className="max-w-5xl mx-auto space-y-6">
-
-                    <div className="flex items-center justify-between bg-slate-900 p-6 rounded-2xl text-white shadow-lg">
-                        <div>
-                            <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
-                                <History className="w-6 h-6 text-amber-400" /> Audit Log
-                            </h1>
-                            <p className="text-slate-400 text-sm mt-1">Riwayat lengkap siapa mengubah apa, dan kapan, di seluruh sistem</p>
-                        </div>
-                    </div>
+                    <PageHeader
+                        icon={<History className="w-6 h-6 text-amber-400" />}
+                        title="Audit Log"
+                        subtitle="Riwayat lengkap siapa mengubah apa, dan kapan, di seluruh sistem"
+                    />
 
                     <div className="flex flex-wrap items-center gap-3 bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
                         <Filter size={16} className="text-slate-400" />
-                        <select
-                            value={tableFilter}
-                            onChange={(e) => { setTableFilter(e.target.value); setPage(0); }}
-                            className="text-sm border border-slate-200 rounded-lg px-3 py-2 bg-white"
-                        >
+                        <select value={tableFilter} onChange={(e) => { setTableFilter(e.target.value); setPage(0); }} className="text-sm border border-slate-200 rounded-lg px-3 py-2 bg-white outline-none focus:ring-2 focus:ring-amber-500">
                             <option value="">Semua Tabel</option>
-                            {Object.entries(TABLE_LABELS).map(([key, label]) => (
-                                <option key={key} value={key}>{label}</option>
-                            ))}
+                            {Object.entries(TABLE_LABELS).map(([key, label]) => (<option key={key} value={key}>{label}</option>))}
                         </select>
-                        <select
-                            value={operationFilter}
-                            onChange={(e) => { setOperationFilter(e.target.value); setPage(0); }}
-                            className="text-sm border border-slate-200 rounded-lg px-3 py-2 bg-white"
-                        >
+                        <select value={operationFilter} onChange={(e) => { setOperationFilter(e.target.value); setPage(0); }} className="text-sm border border-slate-200 rounded-lg px-3 py-2 bg-white outline-none focus:ring-2 focus:ring-amber-500">
                             <option value="">Semua Aksi</option>
                             <option value="INSERT">Tambah Baru</option>
                             <option value="UPDATE">Ubah</option>
@@ -160,40 +65,29 @@ export default function AuditLogPage() {
 
                     <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
                         {isLoading ? (
-                            <div className="p-10 flex justify-center"><Loader2 className="animate-spin text-slate-400" /></div>
+                            <div className="flex justify-center py-10"><div className="w-8 h-8 rounded-full border-4 border-slate-200 border-t-amber-400 animate-spin" /></div>
                         ) : rows.length === 0 ? (
-                            <div className="p-10 text-center text-slate-400 text-sm">Tidak ada riwayat yang cocok dengan filter.</div>
+                            <EmptyState message="Tidak ada riwayat yang cocok dengan filter." dashed />
                         ) : (
                             <div className="divide-y divide-slate-100">
                                 {rows.map((row) => {
-                                    const style = OPERATION_STYLE[row.operation];
+                                    const style = OPERATION_STYLE[row.operation] || { icon: History, color: 'text-slate-600', bg: 'bg-slate-50' };
                                     const Icon = style.icon;
-                                    const diffs = getDiff(row.old_data, row.new_data);
+                                    const diffs = getAuditDiff(row.old_data, row.new_data);
                                     const isExpanded = expandedId === row.id;
 
                                     return (
                                         <div key={row.id} className="p-4">
-                                            <button
-                                                onClick={() => setExpandedId(isExpanded ? null : row.id)}
-                                                className="w-full flex items-center justify-between gap-3 text-left"
-                                            >
+                                            <button onClick={() => setExpandedId(isExpanded ? null : row.id)} className="w-full flex items-center justify-between gap-3 text-left outline-none">
                                                 <div className="flex items-center gap-3">
-                                                    <div className={`p-2 rounded-lg ${style.bg} ${style.color} shrink-0`}>
-                                                        <Icon size={14} />
-                                                    </div>
+                                                    <div className={`p-2 rounded-lg ${style.bg} ${style.color} shrink-0`}><Icon size={14} /></div>
                                                     <div>
                                                         <p className="text-sm font-medium text-slate-800">
-                                                            <span className={`font-bold ${style.color}`}>
-                                                                {row.operation === 'INSERT' ? 'Menambah' : row.operation === 'UPDATE' ? 'Mengubah' : 'Menghapus'}
-                                                            </span>
-                                                            {' '}{TABLE_LABELS[row.table_name] || row.table_name}
-                                                            {row.operation === 'UPDATE' && diffs.length > 0 && (
-                                                                <span className="text-slate-400"> · {diffs.length} field berubah</span>
-                                                            )}
+                                                            <span className={`font-bold ${style.color}`}>{row.operation === 'INSERT' ? 'Menambah' : row.operation === 'UPDATE' ? 'Mengubah' : 'Menghapus'}</span>
+                                                            {' '}{TABLE_LABELS[row.table_name as keyof typeof TABLE_LABELS] || row.table_name}
+                                                            {row.operation === 'UPDATE' && diffs.length > 0 && <span className="text-slate-400"> · {diffs.length} field berubah</span>}
                                                         </p>
-                                                        <p className="text-xs text-slate-400 mt-0.5">
-                                                            {row.changed_by} · {new Date(row.changed_at).toLocaleString('id-ID')}
-                                                        </p>
+                                                        <p className="text-xs text-slate-400 mt-0.5">{row.changed_by} · {new Date(row.changed_at).toLocaleString('id-ID')}</p>
                                                     </div>
                                                 </div>
                                                 {(row.operation === 'UPDATE' && diffs.length > 0) || row.operation !== 'UPDATE' ? (
@@ -212,10 +106,10 @@ export default function AuditLogPage() {
                                                         </div>
                                                     ))}
                                                     {row.operation === 'INSERT' && (
-                                                        <pre className="text-xs bg-slate-50 rounded-lg p-2.5 overflow-x-auto">{JSON.stringify(row.new_data, null, 2)}</pre>
+                                                        <pre className="text-xs bg-slate-50 rounded-lg p-2.5 overflow-x-auto whitespace-pre-wrap">{JSON.stringify(row.new_data, null, 2)}</pre>
                                                     )}
                                                     {row.operation === 'DELETE' && (
-                                                        <pre className="text-xs bg-slate-50 rounded-lg p-2.5 overflow-x-auto">{JSON.stringify(row.old_data, null, 2)}</pre>
+                                                        <pre className="text-xs bg-slate-50 rounded-lg p-2.5 overflow-x-auto whitespace-pre-wrap">{JSON.stringify(row.old_data, null, 2)}</pre>
                                                     )}
                                                 </div>
                                             )}
@@ -227,25 +121,12 @@ export default function AuditLogPage() {
                     </div>
 
                     <div className="flex items-center justify-between">
-                        <button
-                            onClick={() => setPage(Math.max(0, page - 1))}
-                            disabled={page === 0}
-                            className="text-xs font-bold text-slate-500 disabled:opacity-30 px-3 py-2 rounded-lg hover:bg-slate-100"
-                        >
-                            ← Sebelumnya
-                        </button>
-                        <span className="text-xs text-slate-400">Halaman {page + 1}</span>
-                        <button
-                            onClick={() => setPage(page + 1)}
-                            disabled={rows.length < PAGE_SIZE}
-                            className="text-xs font-bold text-slate-500 disabled:opacity-30 px-3 py-2 rounded-lg hover:bg-slate-100"
-                        >
-                            Selanjutnya →
-                        </button>
+                        <button onClick={() => setPage(Math.max(0, page - 1))} disabled={page === 0} className="text-xs font-bold text-slate-500 disabled:opacity-30 px-3 py-2 rounded-lg hover:bg-slate-100 transition">← Sebelumnya</button>
+                        <span className="text-xs text-slate-400 font-medium">Halaman {page + 1}</span>
+                        <button onClick={() => setPage(page + 1)} disabled={rows.length < PAGE_SIZE} className="text-xs font-bold text-slate-500 disabled:opacity-30 px-3 py-2 rounded-lg hover:bg-slate-100 transition">Selanjutnya →</button>
                     </div>
-
                 </div>
             </div>
-        </div>
+        </AppLayout>
     );
 }
