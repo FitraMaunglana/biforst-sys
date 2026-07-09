@@ -4,7 +4,7 @@
 // ============================================================
 
 import { supabase } from '@/src/lib/supabaseClient';
-import type { Reimbursement } from '@/src/types';
+import type { Reimbursement, Account } from '@/src/types';
 
 /**
  * Tarik data reimbursement. Jika role adalah admin, tarik semua.
@@ -29,10 +29,24 @@ export async function fetchReimbursements(role: string, email: string): Promise<
 }
 
 /**
+ * Fetch expense accounts for dropdown
+ */
+export async function fetchExpenseAccounts(): Promise<Account[]> {
+  const { data, error } = await supabase
+    .from('accounts')
+    .select('*')
+    .in('type', ['Expense', 'Asset'])
+    .order('name', { ascending: true });
+    
+  if (error) throw error;
+  return (data as Account[]) || [];
+}
+
+/**
  * Ajukan reimbursement baru beserta lampiran
  */
 export async function createReimbursement(
-  data: { title: string; description: string; amount: number; submitted_by: string; expense_date: string },
+  data: { title: string; description: string; amount: number; submitted_by: string; expense_date: string; account_id: string },
   files: File[]
 ): Promise<void> {
   // 1. Buat record reimbursement (Pending)
@@ -44,6 +58,7 @@ export async function createReimbursement(
       amount: data.amount,
       submitted_by: data.submitted_by,
       expense_date: data.expense_date,
+      account_id: data.account_id,
       status: 'Pending'
     })
     .select('id')

@@ -8,10 +8,10 @@ import StatusBadge from '../../src/components/ui/StatusBadge';
 import StatCard from '../../src/components/ui/StatCard';
 import TabToggle from '../../src/components/ui/TabToggle';
 import { useAuth } from '../../src/hooks/useAuth';
-import { fetchReimbursements, createReimbursement, approveReimbursement, rejectReimbursement } from '../../src/services/reimbursement.service';
-import type { Reimbursement } from '../../src/types';
+import { fetchReimbursements, createReimbursement, approveReimbursement, rejectReimbursement, fetchExpenseAccounts } from '../../src/services/reimbursement.service';
+import type { Reimbursement, Account } from '../../src/types';
 import { formatIDR } from '../../src/utils/format';
-import { HandCoins, Plus, Paperclip, Loader2, CheckCircle, XCircle, Clock, AlertCircle } from 'lucide-react';
+import { HandCoins, Plus, Paperclip, Loader2, CheckCircle, XCircle, Clock, AlertCircle, X, Trash2 } from 'lucide-react';
 
 export default function ReimbursementPage() {
     const { role, session } = useAuth();
@@ -19,10 +19,12 @@ export default function ReimbursementPage() {
     const [reimbursements, setReimbursements] = useState<Reimbursement[]>([]);
     const [activeTab, setActiveTab] = useState<'semua' | 'pending'>('semua');
 
+    const [accounts, setAccounts] = useState<Account[]>([]);
+
     // Form Pengajuan
     const [showForm, setShowForm] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
-    const [form, setForm] = useState({ title: '', description: '', amount: 0, expense_date: '' });
+    const [form, setForm] = useState({ title: '', description: '', amount: 0, expense_date: '', account_id: '' });
     const [files, setFiles] = useState<File[]>([]);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -36,8 +38,12 @@ export default function ReimbursementPage() {
         if (!session?.email) return;
         setIsLoading(true);
         try {
-            const data = await fetchReimbursements(role || 'founder', session.email);
+            const [data, accs] = await Promise.all([
+                fetchReimbursements(role || 'founder', session.email),
+                fetchExpenseAccounts()
+            ]);
             setReimbursements(data);
+            setAccounts(accs);
         } catch (error) {
             console.error('Failed to fetch reimbursements:', error);
             alert('Gagal mengambil data reimbursement.');
@@ -52,8 +58,8 @@ export default function ReimbursementPage() {
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!form.title || form.amount <= 0 || files.length === 0 || !form.expense_date) {
-            alert('Judul, nominal valid, tanggal pengeluaran, dan minimal 1 lampiran wajib diisi.');
+        if (!form.title || form.amount <= 0 || files.length === 0 || !form.expense_date || !form.account_id) {
+            alert('Judul, nominal valid, tanggal pengeluaran, kategori pengeluaran, dan minimal 1 lampiran wajib diisi.');
             return;
         }
 
@@ -65,7 +71,7 @@ export default function ReimbursementPage() {
             );
             alert('Reimbursement berhasil diajukan.');
             setShowForm(false);
-            setForm({ title: '', description: '', amount: 0, expense_date: '' });
+            setForm({ title: '', description: '', amount: 0, expense_date: '', account_id: '' });
             setFiles([]);
             loadData();
         } catch (error: any) {
@@ -299,6 +305,20 @@ export default function ReimbursementPage() {
                         />
                     </div>
                     <div>
+                        <label className="block text-sm font-bold text-slate-700 mb-1.5">Kategori Pengeluaran</label>
+                        <select
+                            required
+                            value={form.account_id}
+                            onChange={(e) => setForm({ ...form, account_id: e.target.value })}
+                            className="w-full border border-slate-300 rounded-xl p-3 text-sm outline-none focus:border-rose-500 focus:ring-2 focus:ring-rose-200 transition-all bg-white"
+                        >
+                            <option value="" disabled>Pilih Kategori (Akun)</option>
+                            {accounts.map(acc => (
+                                <option key={acc.id} value={acc.id}>{acc.name} ({acc.code})</option>
+                            ))}
+                        </select>
+                    </div>
+                    <div>
                         <label className="block text-sm font-bold text-slate-700 mb-1.5">Nominal (Rp)</label>
                         <div className="relative">
                             <span className="absolute left-3 top-3 text-slate-400 font-bold">Rp</span>
@@ -327,26 +347,40 @@ export default function ReimbursementPage() {
                             <input
                                 type="file"
                                 multiple
-                                required
+                                required={files.length === 0}
                                 ref={fileInputRef}
                                 onChange={(e) => {
                                     if (e.target.files) {
-                                        setFiles(Array.from(e.target.files));
+                                        const newFiles = Array.from(e.target.files);
+                                        setFiles(prev => [...prev, ...newFiles]);
                                     }
+                                    if (fileInputRef.current) fileInputRef.current.value = '';
                                 }}
                                 className="hidden"
                             />
                             <Paperclip className="w-8 h-8 text-slate-400 mb-2" />
-                            <p className="text-sm font-bold text-slate-700">Klik untuk memilih file</p>
+                            <p className="text-sm font-bold text-slate-700">Klik untuk memilih file tambahan</p>
                             <p className="text-xs text-slate-500 mt-1">Dukung format gambar atau PDF</p>
                         </div>
+                        
                         {files.length > 0 && (
                             <div className="mt-3 space-y-2">
                                 {files.map((f, i) => (
-                                    <div key={i} className="flex items-center gap-2 bg-slate-100 px-3 py-2 rounded-lg text-sm font-medium text-slate-700">
+                                    <div key={i} className="flex items-center gap-3 bg-slate-50 border border-slate-200 px-3 py-2.5 rounded-lg text-sm font-medium text-slate-700 group">
                                         <CheckCircle className="w-4 h-4 text-emerald-500 shrink-0" />
-                                        <span className="truncate">{f.name}</span>
-                                        <span className="text-xs text-slate-400 ml-auto">{(f.size / 1024).toFixed(1)} KB</span>
+                                        <span className="truncate flex-1">{f.name}</span>
+                                        <span className="text-xs text-slate-400">{(f.size / 1024).toFixed(1)} KB</span>
+                                        <button 
+                                            type="button" 
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                setFiles(files.filter((_, idx) => idx !== i));
+                                            }}
+                                            className="p-1.5 text-slate-400 hover:text-rose-500 hover:bg-rose-50 rounded-md transition-colors"
+                                            title="Hapus file"
+                                        >
+                                            <Trash2 size={16} />
+                                        </button>
                                     </div>
                                 ))}
                             </div>
