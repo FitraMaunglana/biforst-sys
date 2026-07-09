@@ -79,19 +79,22 @@ export async function createReimbursement(
       .upload(filePath, file);
 
     if (uploadError) {
-      console.error('Failed to upload file:', uploadError);
-      continue;
+      throw new Error(`Gagal mengupload ${file.name}: ${uploadError.message}`);
     }
 
     const { data: publicUrlData } = supabase.storage
       .from('reimbursements')
       .getPublicUrl(filePath);
 
-    await supabase.from('reimbursement_attachments').insert({
+    const { error: dbError } = await supabase.from('reimbursement_attachments').insert({
       reimbursement_id: reimbursementId,
       file_url: publicUrlData.publicUrl,
       file_name: file.name
     });
+
+    if (dbError) {
+      throw new Error(`Gagal menyimpan data lampiran ${file.name}: ${dbError.message}`);
+    }
   }
 }
 
