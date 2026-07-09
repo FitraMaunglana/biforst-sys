@@ -20,7 +20,7 @@ export async function fetchReimbursements(role: string, email: string): Promise<
     .order('created_at', { ascending: false });
 
   if (role !== 'admin') {
-    query = query.eq('user_email', email);
+    query = query.eq('submitted_by', email);
   }
 
   const { data, error } = await query;
@@ -32,7 +32,7 @@ export async function fetchReimbursements(role: string, email: string): Promise<
  * Ajukan reimbursement baru beserta lampiran
  */
 export async function createReimbursement(
-  data: { title: string; description: string; amount: number; user_email: string },
+  data: { title: string; description: string; amount: number; submitted_by: string },
   files: File[]
 ): Promise<void> {
   // 1. Buat record reimbursement (Pending)
@@ -42,7 +42,7 @@ export async function createReimbursement(
       title: data.title,
       description: data.description,
       amount: data.amount,
-      user_email: data.user_email,
+      submitted_by: data.submitted_by,
       status: 'Pending'
     })
     .select('id')
@@ -56,7 +56,7 @@ export async function createReimbursement(
     const fileExt = file.name.split('.').pop();
     const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
     // Pastikan bucket sudah disiapkan sebelumnya, misalkan namanya 'reimbursements'
-    const filePath = `${data.user_email}/${reimbursementId}/${fileName}`;
+    const filePath = `${data.submitted_by}/${reimbursementId}/${fileName}`;
 
     const { error: uploadError } = await supabase.storage
       .from('reimbursements')

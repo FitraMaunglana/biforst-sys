@@ -60,7 +60,7 @@ export default function ReimbursementPage() {
         setIsSubmitting(true);
         try {
             await createReimbursement(
-                { ...form, user_email: session?.email || '' },
+                { ...form, submitted_by: session?.email || '' },
                 files
             );
             alert('Reimbursement berhasil diajukan.');
@@ -210,7 +210,7 @@ export default function ReimbursementPage() {
                                                 {role === 'admin' && (
                                                     <td className="px-6 py-4">
                                                         <div className="inline-flex items-center gap-2 px-3 py-1 bg-slate-100 rounded-full text-slate-600 font-medium text-xs">
-                                                            {r.user_email}
+                                                            {r.submitted_by}
                                                         </div>
                                                     </td>
                                                 )}

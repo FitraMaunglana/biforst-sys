@@ -183,7 +183,7 @@ export interface ReimbursementAttachment {
 
 export interface Reimbursement {
   id: string;
-  user_email: string; // the founder who requested
+  submitted_by: string; // the founder who requested
   title: string;
   description: string | null;
   amount: number;

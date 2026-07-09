@@ -9,11 +9,12 @@
 - Shell: zsh
 
 ## Aturan wajib sebelum mengerjakan apapun
-1. JANGAN jalankan `git push` atau deploy tanpa konfirmasi eksplisit dari user.
-2. SELALU jalankan `npm run build` setelah selesai edit kode untuk verifikasi tidak ada TypeScript error.
-3. Untuk perubahan database (SQL), JANGAN jalankan otomatis — tampilkan SQL-nya dan minta user jalankan manual di Supabase SQL Editor.
-4. JANGAN hardcode credentials, API keys, atau secrets apapun di kode.
-5. Semua operasi multi-tabel sensitif harus menggunakan Supabase RPC (SECURITY DEFINER), bukan multi-insert dari client.
+1. Before executing any task or writing a full response, evaluate if you have all necessary details, context, and specific preferences. If any information is missing or ambiguous, DO NOT make assumptions or guess. Instead, ask me targeted clarification questions one by one to refine our approach. Repeat this process until you are 95% confident you have the exact details needed for a high-quality answer.
+2. JANGAN jalankan `git push` atau deploy tanpa konfirmasi eksplisit dari user.
+3. SELALU jalankan `npm run build` setelah selesai edit kode untuk verifikasi tidak ada TypeScript error.
+4. Untuk perubahan database (SQL), JANGAN jalankan otomatis — tampilkan SQL-nya dan minta user jalankan manual di Supabase SQL Editor.
+5. JANGAN hardcode credentials, API keys, atau secrets apapun di kode.
+6. Semua operasi multi-tabel sensitif harus menggunakan Supabase RPC (SECURITY DEFINER), bukan multi-insert dari client.
 
 ## Struktur project penting
 - `app/` — Next.js App Router pages
