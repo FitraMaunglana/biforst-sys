@@ -176,7 +176,7 @@ export interface AuditRow {
 export interface ReimbursementAttachment {
   id: string;
   reimbursement_id: string;
-  file_url: string;
+  file_path: string;
   file_name: string;
   uploaded_at: string;
 }

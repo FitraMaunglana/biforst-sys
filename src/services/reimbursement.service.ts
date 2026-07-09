@@ -88,7 +88,7 @@ export async function createReimbursement(
 
     const { error: dbError } = await supabase.from('reimbursement_attachments').insert({
       reimbursement_id: reimbursementId,
-      file_url: publicUrlData.publicUrl,
+      file_path: publicUrlData.publicUrl,
       file_name: file.name
     });
 

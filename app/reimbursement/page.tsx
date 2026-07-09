@@ -229,7 +229,7 @@ export default function ReimbursementPage() {
                                                     {r.reimbursement_attachments && r.reimbursement_attachments.length > 0 ? (
                                                         <div className="flex flex-col gap-1.5">
                                                             {r.reimbursement_attachments.map(att => (
-                                                                <a key={att.id} href={att.file_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 text-xs text-indigo-600 font-medium bg-indigo-50 px-2.5 py-1 rounded-md hover:bg-indigo-100 transition-colors max-w-[200px] truncate">
+                                                                <a key={att.id} href={att.file_path} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 text-xs text-indigo-600 font-medium bg-indigo-50 px-2.5 py-1 rounded-md hover:bg-indigo-100 transition-colors max-w-[200px] truncate">
                                                                     <Paperclip size={12} className="shrink-0" /> <span className="truncate">{att.file_name}</span>
                                                                 </a>
                                                             ))}
