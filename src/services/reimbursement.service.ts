@@ -32,7 +32,7 @@ export async function fetchReimbursements(role: string, email: string): Promise<
  * Ajukan reimbursement baru beserta lampiran
  */
 export async function createReimbursement(
-  data: { title: string; description: string; amount: number; submitted_by: string },
+  data: { title: string; description: string; amount: number; submitted_by: string; expense_date: string },
   files: File[]
 ): Promise<void> {
   // 1. Buat record reimbursement (Pending)
@@ -43,6 +43,7 @@ export async function createReimbursement(
       description: data.description,
       amount: data.amount,
       submitted_by: data.submitted_by,
+      expense_date: data.expense_date,
       status: 'Pending'
     })
     .select('id')

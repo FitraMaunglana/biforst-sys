@@ -185,6 +185,7 @@ export interface Reimbursement {
   id: string;
   submitted_by: string; // the founder who requested
   title: string;
+  expense_date: string;
   description: string | null;
   amount: number;
   status: 'Pending' | 'Approved' | 'Rejected';

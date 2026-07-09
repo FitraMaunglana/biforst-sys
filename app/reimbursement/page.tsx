@@ -22,7 +22,7 @@ export default function ReimbursementPage() {
     // Form Pengajuan
     const [showForm, setShowForm] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
-    const [form, setForm] = useState({ title: '', description: '', amount: 0 });
+    const [form, setForm] = useState({ title: '', description: '', amount: 0, expense_date: '' });
     const [files, setFiles] = useState<File[]>([]);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -52,8 +52,8 @@ export default function ReimbursementPage() {
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!form.title || form.amount <= 0 || files.length === 0) {
-            alert('Judul, nominal valid, dan minimal 1 lampiran wajib diisi.');
+        if (!form.title || form.amount <= 0 || files.length === 0 || !form.expense_date) {
+            alert('Judul, nominal valid, tanggal pengeluaran, dan minimal 1 lampiran wajib diisi.');
             return;
         }
 
@@ -65,7 +65,7 @@ export default function ReimbursementPage() {
             );
             alert('Reimbursement berhasil diajukan.');
             setShowForm(false);
-            setForm({ title: '', description: '', amount: 0 });
+            setForm({ title: '', description: '', amount: 0, expense_date: '' });
             setFiles([]);
             loadData();
         } catch (error: any) {
@@ -286,6 +286,16 @@ export default function ReimbursementPage() {
                             onChange={(e) => setForm({ ...form, title: e.target.value })}
                             className="w-full border border-slate-300 rounded-xl p-3 text-sm outline-none focus:border-rose-500 focus:ring-2 focus:ring-rose-200 transition-all"
                             placeholder="Contoh: Beli perlengkapan instalasi ISP..."
+                        />
+                    </div>
+                    <div>
+                        <label className="block text-sm font-bold text-slate-700 mb-1.5">Tanggal Pengeluaran</label>
+                        <input
+                            type="date"
+                            required
+                            value={form.expense_date}
+                            onChange={(e) => setForm({ ...form, expense_date: e.target.value })}
+                            className="w-full border border-slate-300 rounded-xl p-3 text-sm outline-none focus:border-rose-500 focus:ring-2 focus:ring-rose-200 transition-all"
                         />
                     </div>
                     <div>
