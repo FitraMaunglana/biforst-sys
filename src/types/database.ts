@@ -189,7 +189,7 @@ export interface Reimbursement {
   account_id: string;
   description: string | null;
   amount: number;
-  status: 'Pending' | 'Approved' | 'Rejected';
+  status: 'pending' | 'approved' | 'rejected';
   reject_reason: string | null;
   created_at: string;
   approved_at: string | null;
